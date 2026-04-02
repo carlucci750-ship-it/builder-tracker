@@ -68,6 +68,8 @@ export default function App() {
   const [addDayToJob, setAddDayToJob] = useState(null);
   const [completeMode, setCompleteMode] = useState(false);
   const [finalRevInput, setFinalRevInput] = useState("");
+  const [quoteEditMode, setQuoteEditMode] = useState(false);
+  const [quoteEditVal, setQuoteEditVal] = useState("");
   const showToast = (msg, type = "success") => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast({ msg, type });
@@ -981,7 +983,7 @@ export default function App() {
             <input style={S.input} type="date" value={activeJobForm.startDate} onChange={e => setActiveJobForm({...activeJobForm, startDate: e.target.value})} />
           </div>
           <div style={S.fieldGroup}>
-            <label style={S.label}>Expected Revenue (optional)</label>
+            <label style={S.label}>Quote (optional)</label>
             <input style={S.input} type="number" inputMode="decimal" placeholder="0" value={activeJobForm.expectedRevenue} onChange={e => setActiveJobForm({...activeJobForm, expectedRevenue: e.target.value})} />
           </div>
           <button onClick={createActiveJob} style={{...S.saveBtn, ...(saveFlash ? S.saveBtnFlash : {})}}>{saveFlash ? "✓ Started!" : "Start Job"}</button>
@@ -1014,7 +1016,21 @@ export default function App() {
             <div style={S.rangePreviewRow}><span style={S.rangePreviewLabel}>Job</span><span style={S.rangePreviewVal}>{aj.job || "—"}</span></div>
             <div style={S.rangePreviewRow}><span style={S.rangePreviewLabel}>Started</span><span style={S.rangePreviewVal}>{aj.startDate}</span></div>
             <div style={S.rangePreviewRow}><span style={S.rangePreviewLabel}>Days worked</span><span style={S.rangePreviewVal}>{aj.daysWorked.length}</span></div>
-            {expectedRev > 0 && <div style={S.rangePreviewRow}><span style={S.rangePreviewLabel}>Expected revenue</span><span style={{...S.rangePreviewVal, color:"#E67E22"}}>{fmt(expectedRev)}</span></div>}
+            <div style={S.rangePreviewRow}>
+              <span style={S.rangePreviewLabel}>Quote</span>
+              {quoteEditMode ? (
+                <div style={{display:"flex", gap:6, alignItems:"center"}}>
+                  <input style={{...S.input, width:100, padding:"4px 8px", fontSize:13}} type="number" inputMode="decimal" value={quoteEditVal} onChange={e => setQuoteEditVal(e.target.value)} autoFocus />
+                  <button type="button" onClick={() => { saveActiveJobs(activeJobs.map(j => j.id === aj.id ? {...j, expectedRevenue: Number(quoteEditVal)||0} : j)); setViewingActiveJob({...aj, expectedRevenue: Number(quoteEditVal)||0}); setQuoteEditMode(false); }} style={{...S.editBookingBtn, padding:"4px 10px"}}>Save</button>
+                  <button type="button" onClick={() => setQuoteEditMode(false)} style={{background:"none",border:"none",color:"#555",cursor:"pointer",fontSize:13}}>Cancel</button>
+                </div>
+              ) : (
+                <div style={{display:"flex", gap:8, alignItems:"center"}}>
+                  <span style={{...S.rangePreviewVal, color: expectedRev > 0 ? "#E67E22" : "#555"}}>{expectedRev > 0 ? fmt(expectedRev) : "Not set"}</span>
+                  <button type="button" onClick={() => { setQuoteEditVal(String(aj.expectedRevenue || "")); setQuoteEditMode(true); }} style={{...S.editBookingBtn, padding:"2px 8px", fontSize:11}}>Edit</button>
+                </div>
+              )}
+            </div>
             <div style={S.rangePreviewRow}><span style={S.rangePreviewLabel}>Expenses so far</span><span style={{...S.rangePreviewVal, color:"#E74C3C"}}>{fmt(totalExp)}</span></div>
             {runningProfit !== null && <div style={S.rangePreviewRow}><span style={S.rangePreviewLabel}>Estimated profit</span><span style={{...S.rangePreviewVal, color: runningProfit >= 0 ? "#27AE60" : "#E74C3C", fontWeight:800}}>{fmt(runningProfit)}</span></div>}
           </div>
@@ -1186,7 +1202,7 @@ export default function App() {
               const expectedRev = Number(aj.expectedRevenue) || 0;
               const estProfit = expectedRev > 0 ? expectedRev - totalExp : null;
               return (
-                <button key={aj.id} type="button" onClick={() => { setViewingActiveJob(aj); setJobExpForm({ date: dateKey(new Date()), amount:"", category:"Materials", note:"" }); setCompleteMode(false); setView("activeJobDetail"); }} style={{...S.jobCard, display:"block", textAlign:"left", border:"none", cursor:"pointer", fontFamily:"inherit", color:"#F0F0F0", width:"calc(100% - 40px)", borderLeft:"3px solid #E67E22"}}>
+                <button key={aj.id} type="button" onClick={() => { setViewingActiveJob(aj); setJobExpForm({ date: dateKey(new Date()), amount:"", category:"Materials", note:"" }); setCompleteMode(false); setQuoteEditMode(false); setView("activeJobDetail"); }} style={{...S.jobCard, display:"block", textAlign:"left", border:"none", cursor:"pointer", fontFamily:"inherit", color:"#F0F0F0", width:"calc(100% - 40px)", borderLeft:"3px solid #E67E22"}}>
                   <div style={S.jobCardHeader}>
                     <div>
                       <div style={S.jobCardClient}>{aj.client}</div>
@@ -1198,7 +1214,7 @@ export default function App() {
                   </div>
                   <div style={S.jobCardDates}>Started {aj.startDate} · {aj.daysWorked.length} days worked</div>
                   <div style={S.jobCardStats}>
-                    {expectedRev > 0 && <div style={S.jobCardStat}><span style={S.jobCardStatLbl}>Expected</span>{fmt(expectedRev)}</div>}
+                    {expectedRev > 0 && <div style={S.jobCardStat}><span style={S.jobCardStatLbl}>Quote</span>{fmt(expectedRev)}</div>}
                     <div style={S.jobCardStat}><span style={S.jobCardStatLbl}>Expenses</span><span style={{color:"#E74C3C"}}>{fmt(totalExp)}</span></div>
                     <div style={S.jobCardStat}><span style={S.jobCardStatLbl}>Days</span>{aj.daysWorked.length}</div>
                     {estProfit !== null && <div style={S.jobCardStat}><span style={S.jobCardStatLbl}>Est. Profit</span><span style={{color:estProfit>=0?"#27AE60":"#E74C3C"}}>{fmt(estProfit)}</span></div>}
