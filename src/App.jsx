@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const FULL_MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -15,6 +15,7 @@ const defaultSettings = () => ({ currency: "GBP" });
 
 const getWeekNumber = (d) => { const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7)); const ys = new Date(Date.UTC(date.getUTCFullYear(), 0, 1)); return Math.ceil(((date - ys) / 86400000 + 1) / 7); };
 const fmtBase = (v, symbol = "£", locale = "en-GB") => { if (!v && v !== 0) return `${symbol}0`; return symbol + Number(v).toLocaleString(locale, { minimumFractionDigits: 0, maximumFractionDigits: 0 }); };
+const fmtNum = (v, decimals = 0) => { if (!v && v !== 0) return "0"; return Number(v).toLocaleString("en-GB", { minimumFractionDigits: decimals, maximumFractionDigits: decimals }); };
 const dateKey = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 const defaultEntry = () => ({ client:"", job:"", description:"", hours:"", estimated:"", actual:"", materials:"", labour:"", miles:"", fuelCost:"" });
 const defaultScheduleItem = () => ({ client:"", job:"", expectedEarnings:"" });
@@ -52,6 +53,9 @@ export default function App() {
   const [toast, setToast] = useState(null);
   const toastTimerRef = useRef(null);
   const [confirmAction, setConfirmAction] = useState(null);
+  const [clientSearch, setClientSearch] = useState("");
+  const [jobSearch, setJobSearch] = useState("");
+  const touchStartRef = useRef(null);
   const showToast = (msg, type = "success") => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast({ msg, type });
@@ -59,6 +63,24 @@ export default function App() {
   };
   const currencyMeta = CURRENCIES[settings.currency] || CURRENCIES.GBP;
   const fmt = (v) => fmtBase(v, currencyMeta.symbol, currencyMeta.locale);
+
+  const onTouchStart = useCallback((e) => { touchStartRef.current = e.touches[0].clientX; }, []);
+  const makeSwipeEnd = useCallback((onLeft, onRight) => (e) => {
+    if (touchStartRef.current === null) return;
+    const diff = e.changedTouches[0].clientX - touchStartRef.current;
+    touchStartRef.current = null;
+    if (Math.abs(diff) < 50) return;
+    if (diff > 0) onLeft(); else onRight();
+  }, []);
+
+  const lastEntry = useMemo(() => {
+    const keys = Object.keys(entries).sort().reverse();
+    for (const k of keys) {
+      const e = entries[k];
+      if (e && (e.client || e.job || e.actual)) return e;
+    }
+    return null;
+  }, [entries]);
 
   useEffect(() => {
     Promise.all([load("builder-entries",{}), load("builder-expenses",[]), load("builder-recurring",[]), load("builder-schedule",{}), load("builder-jobs",[]), load("builder-settings", defaultSettings())]).then(([e,ex,rc,sc,jb,st]) => {
@@ -823,6 +845,7 @@ export default function App() {
     const bookedMarginSum = bookedJobsFromCalendar.reduce((t, b) => t + (b.forecastProfit != null ? b.forecastProfit : 0), 0);
     const bookedWithPrice = bookedJobsFromCalendar.filter((b) => b.jobPrice > 0).length;
     const completedSorted = [...jobs].sort((a, b) => (b.completedAt || b.dateFrom || "").localeCompare(a.completedAt || a.dateFrom || ""));
+    const filteredCompleted = jobSearch.trim() ? completedSorted.filter(j => (j.client + " " + j.job).toLowerCase().includes(jobSearch.toLowerCase())) : completedSorted;
     const hasAny = bookedJobsFromCalendar.length > 0 || jobs.length > 0;
     return (
       <div style={S.app}>
@@ -881,7 +904,13 @@ export default function App() {
         ))}
 
         {jobs.length > 0 && <div style={S.sectionTitle}>Completed jobs</div>}
-        {completedSorted.map((j, ji) => (
+        {jobs.length > 0 && (
+          <div style={{ padding: "0 20px 8px" }}>
+            <input style={S.searchInput} placeholder="Search completed jobs..." value={jobSearch} onChange={e => setJobSearch(e.target.value)} />
+          </div>
+        )}
+        {filteredCompleted.length === 0 && jobs.length > 0 && jobSearch.trim() && <div style={S.emptyText}>No jobs match "{jobSearch}"</div>}
+        {filteredCompleted.map((j, ji) => (
           <button type="button" key={j.id || `job-${ji}-${j.dateFrom}-${j.client}`} onClick={() => openJobEdit(j)} style={{...S.jobCard, display:"block", textAlign:"left", border:"none", cursor:"pointer", fontFamily:"inherit", color:"#F0F0F0", width:"calc(100% - 40px)"}}>
             <div style={S.jobCardHeader}>
               <div>
@@ -1295,7 +1324,7 @@ export default function App() {
             </div>
           </>
         ) : (
-          <>
+          <div onTouchStart={onTouchStart} onTouchEnd={makeSwipeEnd(() => setSchedMonth(Math.max(0, schedMonth-1)), () => setSchedMonth(Math.min(11, schedMonth+1)))}>
             {/* Month view */}
             <div style={S.monthNav}>
               <button onClick={() => setSchedMonth(Math.max(0, schedMonth-1))} style={S.navArrow}>◀</button>
@@ -1343,7 +1372,7 @@ export default function App() {
                 return <div style={S.calGrid}>{cells}</div>;
               })()}
             </div>
-          </>
+          </div>
         )}
         <Nav {...navProps} />
       </div>
@@ -1441,6 +1470,11 @@ export default function App() {
           ) : null;
         })()}
         <div style={S.formWrap}>
+          {lastEntry && !form.client && !form.job && (
+            <button type="button" onClick={() => setForm({ ...form, client: lastEntry.client || "", job: lastEntry.job || "", description: lastEntry.description || "", hours: lastEntry.hours || "", estimated: lastEntry.estimated || "", actual: lastEntry.actual || "", materials: lastEntry.materials || "", labour: lastEntry.labour || "", miles: lastEntry.miles || "", fuelCost: lastEntry.fuelCost || "" })} style={S.repeatBtn}>
+              🔁 Repeat last: {lastEntry.client}{lastEntry.job ? ` — ${lastEntry.job}` : ""}
+            </button>
+          )}
           <div style={S.fieldGroup}>
             <label style={S.label}>Client / Who For</label>
             <input style={S.input} list="clients" placeholder="e.g. Mr Smith" value={form.client} onChange={e => updateForm("client", e.target.value)} />
@@ -1541,7 +1575,8 @@ export default function App() {
 
   // ═══ CLIENTS ═══
   if (view === "clients") {
-    const maxE = Math.max(...clientStats.map(c => c.earned), 1);
+    const filteredClients = clientSearch.trim() ? clientStats.filter(c => c.name.toLowerCase().includes(clientSearch.toLowerCase())) : clientStats;
+    const maxE = Math.max(...filteredClients.map(c => c.earned), 1);
     return (
       <div style={S.app}>
         <div style={S.dashHeader}><div style={S.dashIcon}>💰</div><div style={S.dashTitle}>Money</div></div>
@@ -1549,8 +1584,14 @@ export default function App() {
           <button onClick={() => setView("clients")} style={S.toggleBtnActive}>Clients</button>
           <button onClick={() => setView("overheads")} style={S.toggleBtn}>Business Costs</button>
         </div>
+        {clientStats.length > 0 && (
+          <div style={{ padding: "0 20px 8px" }}>
+            <input style={S.searchInput} placeholder="Search clients..." value={clientSearch} onChange={e => setClientSearch(e.target.value)} />
+          </div>
+        )}
         {clientStats.length === 0 && <div style={S.emptyWrap}><div style={{fontSize:40,marginBottom:12}}>📋</div><div style={S.emptyText}>No client data yet</div><div style={{...S.emptyText,fontSize:12,marginTop:4}}>Add a client name to your daily entries</div></div>}
-        {clientStats.map((c, i) => (
+        {filteredClients.length === 0 && clientStats.length > 0 && <div style={S.emptyText}>No clients match "{clientSearch}"</div>}
+        {filteredClients.map((c, i) => (
           <div key={c.name} style={S.clientCard}>
             <div style={S.clientHeader}><div style={S.clientRank}>#{i+1}</div><div style={S.clientName}>{c.name}</div><div style={{...S.clientProfit, color: c.profit>=0?"#27AE60":"#E74C3C"}}>{fmt(c.profit)}</div></div>
             <div style={S.clientBar}><div style={{...S.clientBarFill, width:`${(c.earned/maxE)*100}%`}} /></div>
@@ -1602,7 +1643,7 @@ export default function App() {
     const weekKeys = Object.keys(weeks).sort((a,b) => a-b);
     const bestWeek = weekKeys.reduce((best,wk) => (weeks[wk].profit||0)>(weeks[best]?.profit||0)?wk:best, weekKeys[0]);
     return (
-      <div style={S.app}>
+      <div style={S.app} onTouchStart={onTouchStart} onTouchEnd={makeSwipeEnd(() => setSelectedMonth(Math.max(0,mi-1)), () => setSelectedMonth(Math.min(11,mi+1)))}>
         <div style={S.dashHeader}>
           <div style={S.dashIcon}>📆</div>
           <div style={S.dashTitle}>Calendar</div>
@@ -1618,8 +1659,8 @@ export default function App() {
         </div>
         <div style={S.miniDash}>
           <div style={S.miniRow}><div style={S.miniCard}><div style={S.miniLabel}>Profit</div><div style={{...S.miniVal,color:ms.profit>=0?"#27AE60":"#E74C3C"}}>{fmt(ms.profit)}</div></div><div style={S.miniCard}><div style={S.miniLabel}>Earned</div><div style={{...S.miniVal,color:"#E67E22"}}>{fmt(ms.act)}</div></div></div>
-          <div style={S.miniRow}><div style={S.miniCard}><div style={S.miniLabel}>Estimated</div><div style={S.miniVal}>{fmt(ms.est)}</div></div><div style={S.miniCard}><div style={S.miniLabel}>Hours</div><div style={S.miniVal}>{ms.hrs.toFixed(1)}</div></div></div>
-          <div style={S.miniRow}><div style={S.miniCard}><div style={S.miniLabel}>Travel Miles</div><div style={S.miniVal}>{ms.miles.toFixed(0)}</div></div><div style={S.miniCard}><div style={S.miniLabel}>Overheads</div><div style={{...S.miniVal,color:"#E74C3C",fontSize:16}}>{fmt(monthOverheads[mi])}</div></div></div>
+          <div style={S.miniRow}><div style={S.miniCard}><div style={S.miniLabel}>Estimated</div><div style={S.miniVal}>{fmt(ms.est)}</div></div><div style={S.miniCard}><div style={S.miniLabel}>Hours</div><div style={S.miniVal}>{fmtNum(ms.hrs, 1)}</div></div></div>
+          <div style={S.miniRow}><div style={S.miniCard}><div style={S.miniLabel}>Travel Miles</div><div style={S.miniVal}>{fmtNum(ms.miles)}</div></div><div style={S.miniCard}><div style={S.miniLabel}>Overheads</div><div style={{...S.miniVal,color:"#E74C3C",fontSize:16}}>{fmt(monthOverheads[mi])}</div></div></div>
           {ms.act!==ms.est && ms.est>0 && <div style={S.estVsActual}>{ms.act>=ms.est?"▲":"▼"} {Math.abs(((ms.act-ms.est)/ms.est)*100).toFixed(0)}% {ms.act>=ms.est?"above":"below"} estimate</div>}
         </div>
         <div style={S.weeksList}>
@@ -1644,11 +1685,14 @@ export default function App() {
                   const schedItems = schedule[key] || [];
                   const hasSched = schedItems.length > 0;
                   const schedForecast = schedItems.reduce((t, it) => t + (Number(it.expectedEarnings)||0), 0);
+                  const dayCosts = entry ? (Number(entry.materials)||0) + (Number(entry.labour)||0) + (Number(entry.fuelCost)||0) : 0;
+                  const dayProfit = hasActual ? (Number(entry.actual)||0) - dayCosts : 0;
                   return (
                     <button key={key} onClick={() => openDay(key)} style={{...S.dayCell,...(isW?S.dayCellWknd:{}),...(hasActual?S.dayCellFilled:{}),...(!hasActual && (hasEstimated || hasSched)?S.dayCellEstimated:{}),...(today?S.dayCellToday:{})}}>
                       <div style={S.dayName}>{DAYS[dayOfWeek===0?6:dayOfWeek-1]}</div>
                       <div style={S.dayNum}>{date.getDate()}</div>
                       {hasActual && <div style={S.dayAmt}>{fmt(entry.actual)}</div>}
+                      {hasActual && dayCosts > 0 && <div style={{fontSize:7,color:dayProfit>=0?"#27AE60":"#E74C3C",fontWeight:700}}>{fmt(dayProfit)}</div>}
                       {hasEstimated && !hasActual && <div style={S.dayAmtEst}>{fmt(entry.estimated)}</div>}
                       {!hasEntry && hasSched && schedForecast > 0 && <div style={S.dayAmtEst}>{fmt(schedForecast)}</div>}
                       {hasEntry && entry.client && <div style={S.dayClient}>{entry.client.slice(0,8)}</div>}
@@ -1948,4 +1992,6 @@ const S = {
   confirmBtns: { display: "flex", gap: 10 },
   confirmCancel: { flex: 1, padding: "12px", borderRadius: 10, border: "1px solid #333", background: "transparent", color: "#888", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" },
   confirmOk: { flex: 1, padding: "12px", borderRadius: 10, border: "none", background: "#E74C3C", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" },
+  searchInput: { width: "100%", padding: "10px 12px", borderRadius: 8, border: "2px solid #2A2D35", background: "#22252C", color: "#F0F0F0", fontSize: 14, fontFamily: "inherit", boxSizing: "border-box", outline: "none" },
+  repeatBtn: { width: "100%", padding: "12px 14px", borderRadius: 10, border: "2px solid #3498DB", background: "rgba(52,152,219,0.08)", color: "#3498DB", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 14, fontFamily: "inherit", textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
 };
