@@ -2047,7 +2047,7 @@ export default function App() {
   // ═══ DASHBOARD ═══
   return (
     <div style={S.app}>
-      <div style={S.dashHeader}><div style={S.dashIcon}>🏗️</div><div style={S.dashTitle}>Builder Tracker</div><div style={S.dashYear}>{YEAR} · claude v2</div></div>
+      <div style={S.dashHeader}><div style={S.dashIcon}>🏗️</div><div style={S.dashTitle}>Builder Tracker</div><div style={S.dashYear}>{YEAR} · claude v3</div></div>
       <div style={S.summaryGrid}>
         <div style={{...S.sumCard,...S.sumCardWide,background:yearStats.trueProfit>=0?"rgba(39,174,96,0.1)":"rgba(231,76,60,0.1)",border:`1px solid ${yearStats.trueProfit>=0?"rgba(39,174,96,0.3)":"rgba(231,76,60,0.3)"}`}}><div style={S.sumLabel}>True Profit</div><div style={{...S.sumBig,color:yearStats.trueProfit>=0?"#27AE60":"#E74C3C"}}>{fmt(yearStats.trueProfit)}</div><div style={S.sumSub}>after all costs & overheads</div></div>
         <div style={S.sumCard}><div style={S.sumLabel}>Earned</div><div style={{...S.sumMed,color:"#E67E22"}}>{fmt(yearStats.act)}</div></div>
