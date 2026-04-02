@@ -12,6 +12,8 @@ const CURRENCIES = {
   USD: { label: "US Dollar (USD)", symbol: "$", locale: "en-US" },
 };
 const defaultSettings = () => ({ currency: "GBP" });
+const JOB_EXPENSE_CATS = ["Materials","Fuel","Tools/Parts","Labour","Other"];
+const JOB_CAT_ICONS = {"Materials":"🧱","Fuel":"⛽","Tools/Parts":"🔧","Labour":"👷","Other":"📦"};
 
 const getWeekNumber = (d) => { const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7)); const ys = new Date(Date.UTC(date.getUTCFullYear(), 0, 1)); return Math.ceil(((date - ys) / 86400000 + 1) / 7); };
 const fmtBase = (v, symbol = "£", locale = "en-GB") => { if (!v && v !== 0) return `${symbol}0`; return symbol + Number(v).toLocaleString(locale, { minimumFractionDigits: 0, maximumFractionDigits: 0 }); };
@@ -56,6 +58,16 @@ export default function App() {
   const [clientSearch, setClientSearch] = useState("");
   const [jobSearch, setJobSearch] = useState("");
   const touchStartRef = useRef(null);
+  const [activeJobs, setActiveJobs] = useState([]);
+  const [jobsSubView, setJobsSubView] = useState("active");
+  const [viewingActiveJob, setViewingActiveJob] = useState(null);
+  const [activeJobForm, setActiveJobForm] = useState({ client:"", job:"", startDate: dateKey(new Date()), expectedRevenue:"" });
+  const [jobExpForm, setJobExpForm] = useState({ date: dateKey(new Date()), amount:"", category:"Materials", note:"" });
+  const [jobExpPickerOpen, setJobExpPickerOpen] = useState(false);
+  const [jobExpPickerCategory, setJobExpPickerCategory] = useState(null);
+  const [addDayToJob, setAddDayToJob] = useState(null);
+  const [completeMode, setCompleteMode] = useState(false);
+  const [finalRevInput, setFinalRevInput] = useState("");
   const showToast = (msg, type = "success") => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast({ msg, type });
@@ -83,8 +95,8 @@ export default function App() {
   }, [entries]);
 
   useEffect(() => {
-    Promise.all([load("builder-entries",{}), load("builder-expenses",[]), load("builder-recurring",[]), load("builder-schedule",{}), load("builder-jobs",[]), load("builder-settings", defaultSettings())]).then(([e,ex,rc,sc,jb,st]) => {
-      setEntries(e); setExpenses(ex); setRecurring(rc); setSchedule(sc); setJobs(jb); setSettings({ ...defaultSettings(), ...(st || {}) }); setLoaded(true);
+    Promise.all([load("builder-entries",{}), load("builder-expenses",[]), load("builder-recurring",[]), load("builder-schedule",{}), load("builder-jobs",[]), load("builder-settings", defaultSettings()), load("builder-active-jobs",[])]).then(([e,ex,rc,sc,jb,st,aj]) => {
+      setEntries(e); setExpenses(ex); setRecurring(rc); setSchedule(sc); setJobs(jb); setSettings({ ...defaultSettings(), ...(st || {}) }); setActiveJobs(aj || []); setLoaded(true);
     });
   }, []);
 
@@ -93,6 +105,7 @@ export default function App() {
   const saveRecurring = (r) => { setRecurring(r); save("builder-recurring", r); };
   const saveSchedule = (s) => { setSchedule(s); save("builder-schedule", s); };
   const saveJobs = (j) => { setJobs(j); save("builder-jobs", j); };
+  const saveActiveJobs = (aj) => { setActiveJobs(aj); save("builder-active-jobs", aj); };
   const saveSettings = (s) => { setSettings(s); save("builder-settings", s); };
 
   const updateForm = (f, v) => setForm(p => ({ ...p, [f]: v }));
@@ -114,6 +127,101 @@ export default function App() {
     if (action === "book") { setRangeForm({ client:"", job:"", jobPrice:"", expectedEarnings:"", dateFrom: dateKey(new Date()), dateTo: dateKey(new Date()), includeSaturday: false, includeSunday: false }); setView("bookRange"); }
     if (action === "expense") { setExpForm({ category: EXPENSE_CATEGORIES[0], description:"", amount:"", date: dateKey(new Date()), isRecurring: false, recurringMonthly:"", spreadOverYear: false }); setEditingExp(null); setView("addExpense"); }
     if (action === "job") { setJobForm(defaultJobForm()); setCompletingBooking(null); setView("logJob"); }
+    if (action === "newActiveJob") { setActiveJobForm({ client:"", job:"", startDate: dateKey(new Date()), expectedRevenue:"" }); setView("createActiveJob"); }
+    if (action === "jobExpense") { setJobExpPickerCategory(null); setJobExpPickerOpen(true); }
+    if (action === "jobLabour") { setJobExpPickerCategory("Labour"); setJobExpPickerOpen(true); }
+  };
+
+  const createActiveJob = () => {
+    if (!activeJobForm.client.trim() && !activeJobForm.job.trim()) return;
+    const newJob = {
+      id: "aj_" + Date.now(),
+      client: activeJobForm.client.trim(),
+      job: activeJobForm.job.trim(),
+      startDate: activeJobForm.startDate,
+      expectedRevenue: Number(activeJobForm.expectedRevenue) || 0,
+      daysWorked: [],
+      expenses: [],
+      status: "active",
+      createdAt: dateKey(new Date()),
+    };
+    saveActiveJobs([newJob, ...activeJobs]);
+    setSaveFlash(true); setTimeout(() => setSaveFlash(false), 1200);
+    setView("jobs"); setJobsSubView("active");
+  };
+
+  const addExpenseToJob = (jobId) => {
+    const amt = Number(jobExpForm.amount) || 0;
+    if (amt <= 0) return;
+    const expense = {
+      id: "je_" + Date.now(),
+      date: jobExpForm.date,
+      amount: amt,
+      category: jobExpPickerCategory || jobExpForm.category,
+      note: jobExpForm.note.trim(),
+    };
+    const updated = activeJobs.map(j => j.id === jobId ? { ...j, expenses: [...j.expenses, expense] } : j);
+    saveActiveJobs(updated);
+    const updatedJob = updated.find(j => j.id === jobId);
+    if (updatedJob) setViewingActiveJob(updatedJob);
+    setJobExpForm({ date: dateKey(new Date()), amount:"", category: jobExpForm.category, note:"" });
+    setSaveFlash(true); setTimeout(() => setSaveFlash(false), 1200);
+    setJobExpPickerOpen(false); setJobExpPickerCategory(null);
+  };
+
+  const addDayWorked = (jobId, day) => {
+    const updated = activeJobs.map(j => {
+      if (j.id !== jobId) return j;
+      if (j.daysWorked.includes(day)) return j;
+      return { ...j, daysWorked: [...j.daysWorked, day].sort() };
+    });
+    saveActiveJobs(updated);
+    const updatedJob = updated.find(j => j.id === jobId);
+    if (updatedJob && viewingActiveJob?.id === jobId) setViewingActiveJob(updatedJob);
+  };
+
+  const removeDayWorked = (jobId, day) => {
+    const updated = activeJobs.map(j => j.id === jobId ? { ...j, daysWorked: j.daysWorked.filter(d => d !== day) } : j);
+    saveActiveJobs(updated);
+    const updatedJob = updated.find(j => j.id === jobId);
+    if (updatedJob && viewingActiveJob?.id === jobId) setViewingActiveJob(updatedJob);
+  };
+
+  const removeJobExpense = (jobId, expId) => {
+    const prev = activeJobs;
+    const updated = activeJobs.map(j => j.id === jobId ? { ...j, expenses: j.expenses.filter(e => e.id !== expId) } : j);
+    saveActiveJobs(updated);
+    const updatedJob = updated.find(j => j.id === jobId);
+    if (updatedJob && viewingActiveJob?.id === jobId) setViewingActiveJob(updatedJob);
+    queueUndo("Expense removed", () => saveActiveJobs(prev));
+  };
+
+  const completeActiveJob = (jobId, finalRevenue) => {
+    const aj = activeJobs.find(j => j.id === jobId);
+    if (!aj) return;
+    const totalExpenses = aj.expenses.reduce((t, e) => t + (Number(e.amount) || 0), 0);
+    const rev = Number(finalRevenue) || 0;
+    const jobSummary = {
+      id: aj.id, client: aj.client, job: aj.job, dateFrom: aj.startDate, dateTo: dateKey(new Date()),
+      days: aj.daysWorked.length, totalEarnings: rev, totalHours: 0,
+      materials: aj.expenses.filter(e => e.category === "Materials").reduce((t, e) => t + (Number(e.amount) || 0), 0),
+      labour: aj.expenses.filter(e => e.category === "Labour").reduce((t, e) => t + (Number(e.amount) || 0), 0),
+      fuel: aj.expenses.filter(e => e.category === "Fuel").reduce((t, e) => t + (Number(e.amount) || 0), 0),
+      notes: "", profit: rev - totalExpenses, completedAt: dateKey(new Date()),
+    };
+    saveJobs([jobSummary, ...jobs]);
+    saveActiveJobs(activeJobs.filter(j => j.id !== jobId));
+    setViewingActiveJob(null);
+    setSaveFlash(true); setTimeout(() => setSaveFlash(false), 1200);
+    setView("jobs"); setJobsSubView("completed");
+  };
+
+  const deleteActiveJob = (jobId) => {
+    const prev = activeJobs;
+    saveActiveJobs(activeJobs.filter(j => j.id !== jobId));
+    setViewingActiveJob(null);
+    queueUndo("Job deleted", () => saveActiveJobs(prev));
+    setView("jobs"); setJobsSubView("active");
   };
   const updateExpForm = (f, v) => setExpForm(p => {
     const next = { ...p, [f]: v };
@@ -205,6 +313,7 @@ export default function App() {
       recurring,
       schedule,
       jobs,
+      activeJobs,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -226,12 +335,14 @@ export default function App() {
       const nextRecurring = Array.isArray(data.recurring) ? data.recurring : [];
       const nextSchedule = data.schedule && typeof data.schedule === "object" ? data.schedule : {};
       const nextJobs = Array.isArray(data.jobs) ? data.jobs : [];
+      const nextActiveJobs = Array.isArray(data.activeJobs) ? data.activeJobs : [];
       const nextSettings = { ...defaultSettings(), ...(data.settings || {}) };
       saveEntries(nextEntries);
       saveExpenses(nextExpenses);
       saveRecurring(nextRecurring);
       saveSchedule(nextSchedule);
       saveJobs(nextJobs);
+      saveActiveJobs(nextActiveJobs);
       saveSettings(nextSettings);
       setView("dashboard");
       setSaveFlash(true); setTimeout(() => setSaveFlash(false), 1200);
@@ -244,12 +355,13 @@ export default function App() {
   };
 
   const resetAllData = () => {
-    const snapshot = { entries, expenses, recurring, schedule, jobs, settings };
+    const snapshot = { entries, expenses, recurring, schedule, jobs, settings, activeJobs };
     saveEntries({});
     saveExpenses([]);
     saveRecurring([]);
     saveSchedule({});
     saveJobs([]);
+    saveActiveJobs([]);
     saveSettings(defaultSettings());
     setForm(defaultEntry());
     setExpForm({ category: EXPENSE_CATEGORIES[0], description:"", amount:"", date: dateKey(new Date()), isRecurring: false, recurringMonthly:"", spreadOverYear: false });
@@ -264,6 +376,7 @@ export default function App() {
       saveRecurring(snapshot.recurring);
       saveSchedule(snapshot.schedule);
       saveJobs(snapshot.jobs);
+      saveActiveJobs(snapshot.activeJobs);
       saveSettings(snapshot.settings);
     });
   };
@@ -837,99 +950,290 @@ export default function App() {
     );
   }
 
+  // ═══ CREATE ACTIVE JOB ═══
+  if (view === "createActiveJob") {
+    return (
+      <div style={S.app}>
+        <div style={S.entryHeader}>
+          <button onClick={() => setView("jobs")} style={S.backBtn}>← Back</button>
+          <div style={S.entryDateNum}>Start a Job</div>
+        </div>
+        <div style={S.formWrap}>
+          <div style={S.fieldGroup}>
+            <label style={S.label}>Client</label>
+            <input style={S.input} list="aj-clients" placeholder="e.g. Mr Smith" value={activeJobForm.client} onChange={e => setActiveJobForm({...activeJobForm, client: e.target.value})} />
+            <datalist id="aj-clients">{knownClients.map(c => <option key={c} value={c} />)}</datalist>
+          </div>
+          <div style={S.fieldGroup}>
+            <label style={S.label}>Job</label>
+            <input style={S.input} list="aj-jobs" placeholder="e.g. Kitchen refit" value={activeJobForm.job} onChange={e => setActiveJobForm({...activeJobForm, job: e.target.value})} />
+            <datalist id="aj-jobs">{knownJobs.map(j => <option key={j} value={j} />)}</datalist>
+          </div>
+          <div style={S.fieldGroup}>
+            <label style={S.label}>Start Date</label>
+            <input style={S.input} type="date" value={activeJobForm.startDate} onChange={e => setActiveJobForm({...activeJobForm, startDate: e.target.value})} />
+          </div>
+          <div style={S.fieldGroup}>
+            <label style={S.label}>Expected Revenue (optional)</label>
+            <input style={S.input} type="number" inputMode="decimal" placeholder="0" value={activeJobForm.expectedRevenue} onChange={e => setActiveJobForm({...activeJobForm, expectedRevenue: e.target.value})} />
+          </div>
+          <button onClick={createActiveJob} style={{...S.saveBtn, ...(saveFlash ? S.saveBtnFlash : {})}}>{saveFlash ? "✓ Started!" : "Start Job"}</button>
+        </div>
+      </div>
+    );
+  }
+
+  // ═══ ACTIVE JOB DETAIL ═══
+  if (view === "activeJobDetail" && viewingActiveJob) {
+    const aj = activeJobs.find(j => j.id === viewingActiveJob.id) || viewingActiveJob;
+    const totalExp = aj.expenses.reduce((t, e) => t + (Number(e.amount) || 0), 0);
+    const byCategory = {};
+    aj.expenses.forEach(e => { byCategory[e.category] = (byCategory[e.category] || 0) + (Number(e.amount) || 0); });
+    const expectedRev = Number(aj.expectedRevenue) || 0;
+    const runningProfit = expectedRev > 0 ? expectedRev - totalExp : null;
+
+    return (
+      <div style={S.app}>
+        <div style={S.entryHeader}>
+          <button onClick={() => { setViewingActiveJob(null); setView("jobs"); setJobsSubView("active"); }} style={S.backBtn}>← Back</button>
+          <div style={S.entryDate}>
+            <div style={S.entryDay}>Active</div>
+            <div style={S.entryDateNum}>{aj.client}</div>
+          </div>
+        </div>
+
+        <div style={S.formWrap}>
+          <div style={{...S.rangePreview, marginBottom: 14}}>
+            <div style={S.rangePreviewRow}><span style={S.rangePreviewLabel}>Job</span><span style={S.rangePreviewVal}>{aj.job || "—"}</span></div>
+            <div style={S.rangePreviewRow}><span style={S.rangePreviewLabel}>Started</span><span style={S.rangePreviewVal}>{aj.startDate}</span></div>
+            <div style={S.rangePreviewRow}><span style={S.rangePreviewLabel}>Days worked</span><span style={S.rangePreviewVal}>{aj.daysWorked.length}</span></div>
+            {expectedRev > 0 && <div style={S.rangePreviewRow}><span style={S.rangePreviewLabel}>Expected revenue</span><span style={{...S.rangePreviewVal, color:"#E67E22"}}>{fmt(expectedRev)}</span></div>}
+            <div style={S.rangePreviewRow}><span style={S.rangePreviewLabel}>Expenses so far</span><span style={{...S.rangePreviewVal, color:"#E74C3C"}}>{fmt(totalExp)}</span></div>
+            {runningProfit !== null && <div style={S.rangePreviewRow}><span style={S.rangePreviewLabel}>Estimated profit</span><span style={{...S.rangePreviewVal, color: runningProfit >= 0 ? "#27AE60" : "#E74C3C", fontWeight:800}}>{fmt(runningProfit)}</span></div>}
+          </div>
+
+          {Object.keys(byCategory).length > 0 && (
+            <div style={{...S.miniRow, marginBottom: 10, flexWrap: "wrap"}}>
+              {Object.entries(byCategory).map(([cat, amt]) => (
+                <div key={cat} style={{...S.miniCard, flex:"0 0 auto", minWidth: 80}}>
+                  <div style={S.miniLabel}>{JOB_CAT_ICONS[cat] || "📦"} {cat}</div>
+                  <div style={{...S.miniVal, fontSize: 14, color:"#E74C3C"}}>{fmt(amt)}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Add expense */}
+          <div style={S.sectionTitle}>Add Expense</div>
+          <div style={{display:"flex", gap:6, flexWrap:"wrap", marginBottom:8}}>
+            {JOB_EXPENSE_CATS.map(cat => (
+              <button key={cat} type="button" onClick={() => setJobExpForm({...jobExpForm, category: cat})} style={jobExpForm.category === cat ? {...S.toggleBtnActive, flex:"0 0 auto", padding:"8px 12px", borderRadius:20, fontSize:12} : {...S.toggleBtn, flex:"0 0 auto", padding:"8px 12px", borderRadius:20, fontSize:12, border:"1px solid #333"}}>
+                {JOB_CAT_ICONS[cat]} {cat}
+              </button>
+            ))}
+          </div>
+          <div style={S.row}>
+            <div style={S.half}><label style={S.label}>Amount</label><input style={S.input} type="number" inputMode="decimal" placeholder="0" value={jobExpForm.amount} onChange={e => setJobExpForm({...jobExpForm, amount: e.target.value})} /></div>
+            <div style={S.half}><label style={S.label}>Date</label><input style={S.input} type="date" value={jobExpForm.date} onChange={e => setJobExpForm({...jobExpForm, date: e.target.value})} /></div>
+          </div>
+          <div style={S.fieldGroup}><label style={S.label}>Note (optional)</label><input style={S.input} placeholder="e.g. screws and sealant" value={jobExpForm.note} onChange={e => setJobExpForm({...jobExpForm, note: e.target.value})} /></div>
+          <button onClick={() => addExpenseToJob(aj.id)} style={{...S.saveBtn, ...(saveFlash ? S.saveBtnFlash : {})}}>{saveFlash ? "✓ Added!" : `+ Add ${jobExpForm.category}`}</button>
+
+          {/* Days worked */}
+          <div style={S.sectionTitle}>Days Worked</div>
+          <div style={{display:"flex", gap:6, flexWrap:"wrap", marginBottom:8}}>
+            {aj.daysWorked.map(d => (
+              <div key={d} style={{background:"#22252C", borderRadius:8, padding:"6px 10px", fontSize:12, display:"flex", alignItems:"center", gap:6}}>
+                <span>{new Date(d+"T12:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"})}</span>
+                <button type="button" onClick={() => removeDayWorked(aj.id, d)} style={{background:"none",border:"none",color:"#555",fontSize:14,cursor:"pointer",padding:0}}>✕</button>
+              </div>
+            ))}
+          </div>
+          <div style={S.row}>
+            <div style={{flex:1}}>
+              <input id="add-day-input" style={S.input} type="date" defaultValue={dateKey(new Date())} />
+            </div>
+            <button type="button" onClick={() => { const inp = document.getElementById("add-day-input"); if (inp?.value) { addDayWorked(aj.id, inp.value); } }} style={{...S.editBookingBtn, padding:"10px 16px", alignSelf:"flex-end"}}>+ Add Day</button>
+          </div>
+
+          {/* Expense history */}
+          {aj.expenses.length > 0 && <div style={S.sectionTitle}>Expense History</div>}
+          {[...aj.expenses].reverse().map(exp => (
+            <div key={exp.id} style={S.expRow}>
+              <div style={S.expIcon}>{JOB_CAT_ICONS[exp.category] || "📦"}</div>
+              <div style={S.expInfo}>
+                <div style={S.expName}>{exp.note || exp.category}</div>
+                <div style={S.expCat}>{new Date(exp.date+"T12:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"})} · {exp.category}</div>
+              </div>
+              <div style={S.expAmount}>{fmt(exp.amount)}</div>
+              <button onClick={() => removeJobExpense(aj.id, exp.id)} style={S.expDel}>✕</button>
+            </div>
+          ))}
+
+          <div style={S.divider} />
+
+          {/* Complete job */}
+          {!completeMode ? (
+            <button onClick={() => { setCompleteMode(true); setFinalRevInput(String(aj.expectedRevenue || "")); }} style={S.completeJobBtn}>✓ Complete Job</button>
+          ) : (
+            <div style={{...S.rangePreview, marginTop: 8}}>
+              <div style={{fontSize:13,fontWeight:700,color:"#27AE60",marginBottom:8}}>Complete this job</div>
+              <div style={S.fieldGroup}>
+                <label style={S.label}>Final Revenue</label>
+                <input style={S.input} type="number" inputMode="decimal" placeholder="0" value={finalRevInput} onChange={e => setFinalRevInput(e.target.value)} />
+              </div>
+              {Number(finalRevInput) > 0 && (
+                <div style={{...S.rangePreviewRow, marginBottom:8}}>
+                  <span style={S.rangePreviewLabel}>Final profit</span>
+                  <span style={{...S.rangePreviewVal, color: (Number(finalRevInput) - totalExp) >= 0 ? "#27AE60" : "#E74C3C", fontWeight:800}}>{fmt(Number(finalRevInput) - totalExp)}</span>
+                </div>
+              )}
+              <div style={{display:"flex", gap:8}}>
+                <button onClick={() => setCompleteMode(false)} style={{...S.confirmCancel, flex:1}}>Cancel</button>
+                <button onClick={() => completeActiveJob(aj.id, finalRevInput)} style={{...S.saveBtn, flex:1, marginTop:0}}>Complete</button>
+              </div>
+            </div>
+          )}
+
+          <button type="button" onClick={() => setConfirmAction({ label: `Delete "${aj.client} — ${aj.job}"?`, action: () => deleteActiveJob(aj.id) })} style={S.deleteBtn}>Delete Job</button>
+        </div>
+      </div>
+    );
+  }
+
+  // ═══ ADD EXPENSE TO JOB (picker) ═══
+  if (jobExpPickerOpen && activeJobs.length > 0) {
+    return (
+      <div style={S.app}>
+        <div style={S.entryHeader}>
+          <button onClick={() => { setJobExpPickerOpen(false); setJobExpPickerCategory(null); }} style={S.backBtn}>← Back</button>
+          <div style={S.entryDateNum}>{jobExpPickerCategory ? `Add ${jobExpPickerCategory}` : "Add Job Expense"}</div>
+        </div>
+        <div style={S.formWrap}>
+          <div style={S.sectionTitle}>Pick a job</div>
+          {activeJobs.map(aj => {
+            const totalExp = aj.expenses.reduce((t, e) => t + (Number(e.amount) || 0), 0);
+            return (
+              <button key={aj.id} type="button" onClick={() => {
+                setViewingActiveJob(aj);
+                setJobExpForm({ date: dateKey(new Date()), amount:"", category: jobExpPickerCategory || "Materials", note:"" });
+                setJobExpPickerOpen(false);
+                setCompleteMode(false);
+                setView("activeJobDetail");
+              }} style={{...S.jobCard, display:"block", textAlign:"left", border:"none", cursor:"pointer", fontFamily:"inherit", color:"#F0F0F0", width:"calc(100% - 40px)", borderLeft:"3px solid #E67E22"}}>
+                <div style={S.jobCardHeader}>
+                  <div>
+                    <div style={S.jobCardClient}>{aj.client}</div>
+                    <div style={S.jobCardJob}>{aj.job}</div>
+                  </div>
+                  <div style={{...S.jobCardProfit, color:"#E74C3C", fontSize:16}}>{fmt(totalExp)}</div>
+                </div>
+                <div style={S.jobCardDates}>Started {aj.startDate} · {aj.daysWorked.length} days · {aj.expenses.length} expenses</div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   // ═══ JOBS LIST ═══
   if (view === "jobs") {
     const totalJobProfit = jobs.reduce((t, j) => t + (j.profit||0), 0);
     const totalJobEarnings = jobs.reduce((t, j) => t + (j.totalEarnings||0), 0);
-    const bookedForecastSum = bookedJobsFromCalendar.reduce((t, b) => t + b.forecastTurnover, 0);
-    const bookedMarginSum = bookedJobsFromCalendar.reduce((t, b) => t + (b.forecastProfit != null ? b.forecastProfit : 0), 0);
-    const bookedWithPrice = bookedJobsFromCalendar.filter((b) => b.jobPrice > 0).length;
     const completedSorted = [...jobs].sort((a, b) => (b.completedAt || b.dateFrom || "").localeCompare(a.completedAt || a.dateFrom || ""));
     const filteredCompleted = jobSearch.trim() ? completedSorted.filter(j => (j.client + " " + j.job).toLowerCase().includes(jobSearch.toLowerCase())) : completedSorted;
-    const hasAny = bookedJobsFromCalendar.length > 0 || jobs.length > 0;
+    const totalActiveExp = activeJobs.reduce((t, aj) => t + aj.expenses.reduce((t2, e) => t2 + (Number(e.amount) || 0), 0), 0);
+
     return (
       <div style={S.app}>
         <div style={S.dashHeader}><div style={S.dashIcon}>🔨</div><div style={S.dashTitle}>Jobs</div></div>
 
-        <button onClick={() => { setJobForm(defaultJobForm()); setCompletingBooking(null); setView("logJob"); }} style={S.bookRangeBtn}>+ Log a Completed Job</button>
+        <div style={{ ...S.toggleRow, margin: "0 20px 12px" }}>
+          <button onClick={() => setJobsSubView("active")} style={jobsSubView === "active" ? S.toggleBtnActive : S.toggleBtn}>Active Jobs</button>
+          <button onClick={() => setJobsSubView("completed")} style={jobsSubView === "completed" ? S.toggleBtnActive : S.toggleBtn}>Completed</button>
+        </div>
 
-        {bookedJobsFromCalendar.length > 0 && (
-          <div style={{...S.miniRow, padding: "0 20px 8px"}}>
-            <div style={S.miniCard}><div style={S.miniLabel}>Calendar bookings</div><div style={S.miniVal}>{bookedJobsFromCalendar.length}</div></div>
-            <div style={S.miniCard}><div style={S.miniLabel}>Forecast £</div><div style={{...S.miniVal, color: "#3498DB"}}>{fmt(bookedForecastSum)}</div></div>
-            {bookedWithPrice > 0 && (
-              <div style={S.miniCard}><div style={S.miniLabel}>Price − forecast</div><div style={{...S.miniVal, color: bookedMarginSum >= 0 ? "#27AE60" : "#E74C3C"}}>{fmt(bookedMarginSum)}</div></div>
+        {jobsSubView === "active" ? (
+          <>
+            <button onClick={() => openQuickAction("newActiveJob")} style={S.bookRangeBtn}>+ Start a New Job</button>
+
+            {activeJobs.length > 0 && (
+              <div style={{...S.miniRow, padding: "0 20px 8px"}}>
+                <div style={S.miniCard}><div style={S.miniLabel}>Active jobs</div><div style={S.miniVal}>{activeJobs.length}</div></div>
+                <div style={S.miniCard}><div style={S.miniLabel}>Total expenses</div><div style={{...S.miniVal, color:"#E74C3C"}}>{fmt(totalActiveExp)}</div></div>
+              </div>
             )}
-          </div>
-        )}
 
-        {jobs.length > 0 && (
-          <div style={{...S.miniRow, padding: "0 20px 8px"}}>
-            <div style={S.miniCard}><div style={S.miniLabel}>Completed · earned</div><div style={{...S.miniVal, color:"#E67E22"}}>{fmt(totalJobEarnings)}</div></div>
-            <div style={S.miniCard}><div style={S.miniLabel}>Completed · profit</div><div style={{...S.miniVal, color: totalJobProfit>=0?"#27AE60":"#E74C3C"}}>{fmt(totalJobProfit)}</div></div>
-          </div>
-        )}
+            {activeJobs.length === 0 && <div style={S.emptyWrap}><div style={{fontSize:40,marginBottom:12}}>🔨</div><div style={S.emptyText}>No active jobs</div><div style={{...S.emptyText,fontSize:12,marginTop:4}}>Start a job to track expenses as you go</div></div>}
 
-        {!hasAny && <div style={S.emptyWrap}><div style={{fontSize:40,marginBottom:12}}>🔨</div><div style={S.emptyText}>No jobs yet</div><div style={{...S.emptyText,fontSize:12,marginTop:4}}>Book on the calendar or log a completed job here</div></div>}
+            {activeJobs.map(aj => {
+              const totalExp = aj.expenses.reduce((t, e) => t + (Number(e.amount) || 0), 0);
+              const expectedRev = Number(aj.expectedRevenue) || 0;
+              const estProfit = expectedRev > 0 ? expectedRev - totalExp : null;
+              return (
+                <button key={aj.id} type="button" onClick={() => { setViewingActiveJob(aj); setJobExpForm({ date: dateKey(new Date()), amount:"", category:"Materials", note:"" }); setCompleteMode(false); setView("activeJobDetail"); }} style={{...S.jobCard, display:"block", textAlign:"left", border:"none", cursor:"pointer", fontFamily:"inherit", color:"#F0F0F0", width:"calc(100% - 40px)", borderLeft:"3px solid #E67E22"}}>
+                  <div style={S.jobCardHeader}>
+                    <div>
+                      <div style={S.jobCardClient}>{aj.client}</div>
+                      <div style={S.jobCardJob}>{aj.job}</div>
+                    </div>
+                    <div style={{...S.jobCardProfit, color: estProfit !== null ? (estProfit >= 0 ? "#27AE60" : "#E74C3C") : "#E74C3C", fontSize: estProfit !== null ? 20 : 16}}>
+                      {estProfit !== null ? fmt(estProfit) : fmt(totalExp)}
+                    </div>
+                  </div>
+                  <div style={S.jobCardDates}>Started {aj.startDate} · {aj.daysWorked.length} days worked</div>
+                  <div style={S.jobCardStats}>
+                    {expectedRev > 0 && <div style={S.jobCardStat}><span style={S.jobCardStatLbl}>Expected</span>{fmt(expectedRev)}</div>}
+                    <div style={S.jobCardStat}><span style={S.jobCardStatLbl}>Expenses</span><span style={{color:"#E74C3C"}}>{fmt(totalExp)}</span></div>
+                    <div style={S.jobCardStat}><span style={S.jobCardStatLbl}>Days</span>{aj.daysWorked.length}</div>
+                    {estProfit !== null && <div style={S.jobCardStat}><span style={S.jobCardStatLbl}>Est. Profit</span><span style={{color:estProfit>=0?"#27AE60":"#E74C3C"}}>{fmt(estProfit)}</span></div>}
+                  </div>
+                  <div style={{ fontSize: 11, color: "#555", marginTop: 6 }}>Tap to add expenses →</div>
+                </button>
+              );
+            })}
+          </>
+        ) : (
+          <>
+            <button onClick={() => { setJobForm(defaultJobForm()); setCompletingBooking(null); setView("logJob"); }} style={S.bookRangeBtn}>+ Log a Completed Job</button>
 
-        {bookedJobsFromCalendar.length > 0 && <div style={S.sectionTitle}>Calendar bookings</div>}
-        {bookedJobsFromCalendar.map((b) => (
-          <div key={b.bookingId} style={{ ...S.jobCard, borderLeft: "3px solid #3498DB" }}>
-            <div style={S.jobBookedBadge}>📅 Booked · calendar</div>
-            <div style={S.jobCardHeader}>
-              <div>
-                <div style={S.jobCardClient}>{b.client}</div>
-                <div style={S.jobCardJob}>{b.job}</div>
+            {jobs.length > 0 && (
+              <div style={{...S.miniRow, padding: "0 20px 8px"}}>
+                <div style={S.miniCard}><div style={S.miniLabel}>Completed · earned</div><div style={{...S.miniVal, color:"#E67E22"}}>{fmt(totalJobEarnings)}</div></div>
+                <div style={S.miniCard}><div style={S.miniLabel}>Completed · profit</div><div style={{...S.miniVal, color: totalJobProfit>=0?"#27AE60":"#E74C3C"}}>{fmt(totalJobProfit)}</div></div>
               </div>
-              <div style={{
-                ...S.jobCardProfit,
-                color: b.forecastProfit != null ? (b.forecastProfit >= 0 ? "#27AE60" : "#E74C3C") : "#3498DB",
-                fontSize: b.forecastProfit != null ? 20 : 18,
-              }}>
-                {b.forecastProfit != null ? fmt(b.forecastProfit) : fmt(b.forecastTurnover)}
-              </div>
-            </div>
-            <div style={S.jobCardDates}>{b.dateFrom} → {b.dateTo} · {b.days} days{b.forecastProfit != null ? " · price − forecast" : " · daily forecast total"}</div>
-            <div style={S.jobCardStats}>
-              <div style={S.jobCardStat}><span style={S.jobCardStatLbl}>Job price</span>{b.jobPrice > 0 ? fmt(b.jobPrice) : "—"}</div>
-              <div style={S.jobCardStat}><span style={S.jobCardStatLbl}>Forecast</span>{fmt(b.forecastTurnover)}</div>
-              <div style={S.jobCardStat}><span style={S.jobCardStatLbl}>Per day</span>{b.days > 0 ? fmt(Math.round(b.forecastTurnover / b.days)) : "—"}</div>
-              <div style={S.jobCardStat}><span style={S.jobCardStatLbl}>Margin</span>{b.forecastProfit != null ? fmt(b.forecastProfit) : "—"}</div>
-            </div>
-            <div style={S.jobBookedActions}>
-              <button type="button" onClick={() => openBookingForEdit(b.bookingId)} style={{ ...S.editBookingBtn, flex: 1, padding: "10px 12px" }}>Edit / complete</button>
-              <button type="button" onClick={() => setConfirmAction({ label: "Remove this booking from the calendar?", action: () => deleteBooking(b.bookingId) })} style={S.jobRemoveBtn}>Remove</button>
-            </div>
-          </div>
-        ))}
+            )}
 
-        {jobs.length > 0 && <div style={S.sectionTitle}>Completed jobs</div>}
-        {jobs.length > 0 && (
-          <div style={{ padding: "0 20px 8px" }}>
-            <input style={S.searchInput} placeholder="Search completed jobs..." value={jobSearch} onChange={e => setJobSearch(e.target.value)} />
-          </div>
-        )}
-        {filteredCompleted.length === 0 && jobs.length > 0 && jobSearch.trim() && <div style={S.emptyText}>No jobs match "{jobSearch}"</div>}
-        {filteredCompleted.map((j, ji) => (
-          <button type="button" key={j.id || `job-${ji}-${j.dateFrom}-${j.client}`} onClick={() => openJobEdit(j)} style={{...S.jobCard, display:"block", textAlign:"left", border:"none", cursor:"pointer", fontFamily:"inherit", color:"#F0F0F0", width:"calc(100% - 40px)"}}>
-            <div style={S.jobCardHeader}>
-              <div>
-                <div style={S.jobCardClient}>{j.client}</div>
-                <div style={S.jobCardJob}>{j.job}</div>
+            {jobs.length > 0 && (
+              <div style={{ padding: "0 20px 8px" }}>
+                <input style={S.searchInput} placeholder="Search completed jobs..." value={jobSearch} onChange={e => setJobSearch(e.target.value)} />
               </div>
-              <div style={{...S.jobCardProfit, color: j.profit>=0?"#27AE60":"#E74C3C"}}>{fmt(j.profit)}</div>
-            </div>
-            <div style={S.jobCardDates}>{j.dateFrom} → {j.dateTo} · {j.days} days</div>
-            <div style={S.jobCardStats}>
-              <div style={S.jobCardStat}><span style={S.jobCardStatLbl}>Earned</span>{fmt(j.totalEarnings)}</div>
-              <div style={S.jobCardStat}><span style={S.jobCardStatLbl}>Materials</span>{fmt(j.materials)}</div>
-              <div style={S.jobCardStat}><span style={S.jobCardStatLbl}>Labour</span>{fmt(j.labour)}</div>
-              <div style={S.jobCardStat}><span style={S.jobCardStatLbl}>Fuel</span>{fmt(j.fuel)}</div>
-            </div>
-            {j.notes && <div style={S.jobCardNotes}>📝 {j.notes}</div>}
-            <div style={{ fontSize: 11, color: "#555", marginTop: 6 }}>Tap to edit →</div>
-          </button>
-        ))}
+            )}
+            {filteredCompleted.length === 0 && jobs.length > 0 && jobSearch.trim() && <div style={S.emptyText}>No jobs match "{jobSearch}"</div>}
+            {jobs.length === 0 && <div style={S.emptyWrap}><div style={{fontSize:40,marginBottom:12}}>✓</div><div style={S.emptyText}>No completed jobs yet</div></div>}
+            {filteredCompleted.map((j, ji) => (
+              <button type="button" key={j.id || `job-${ji}-${j.dateFrom}-${j.client}`} onClick={() => openJobEdit(j)} style={{...S.jobCard, display:"block", textAlign:"left", border:"none", cursor:"pointer", fontFamily:"inherit", color:"#F0F0F0", width:"calc(100% - 40px)"}}>
+                <div style={S.jobCardHeader}>
+                  <div>
+                    <div style={S.jobCardClient}>{j.client}</div>
+                    <div style={S.jobCardJob}>{j.job}</div>
+                  </div>
+                  <div style={{...S.jobCardProfit, color: j.profit>=0?"#27AE60":"#E74C3C"}}>{fmt(j.profit)}</div>
+                </div>
+                <div style={S.jobCardDates}>{j.dateFrom} → {j.dateTo} · {j.days} days</div>
+                <div style={S.jobCardStats}>
+                  <div style={S.jobCardStat}><span style={S.jobCardStatLbl}>Earned</span>{fmt(j.totalEarnings)}</div>
+                  <div style={S.jobCardStat}><span style={S.jobCardStatLbl}>Materials</span>{fmt(j.materials)}</div>
+                  <div style={S.jobCardStat}><span style={S.jobCardStatLbl}>Labour</span>{fmt(j.labour)}</div>
+                  <div style={S.jobCardStat}><span style={S.jobCardStatLbl}>Fuel</span>{fmt(j.fuel)}</div>
+                </div>
+                {j.notes && <div style={S.jobCardNotes}>📝 {j.notes}</div>}
+                <div style={{ fontSize: 11, color: "#555", marginTop: 6 }}>Tap to edit →</div>
+              </button>
+            ))}
+          </>
+        )}
         <div style={{height:40}} />
         <Nav {...navProps} />
       </div>
@@ -1759,9 +2063,13 @@ function Nav({ view, setView, openDay, onQuickAdd, quickActionsOpen, setQuickAct
       {quickActionsOpen && (
         <div style={S.quickMenu}>
           <button type="button" onClick={() => onQuickAdd("entry")} style={S.quickItem}>➕ Add today's entry</button>
-          <button type="button" onClick={() => onQuickAdd("book")} style={S.quickItem}>📋 Book a job</button>
-          <button type="button" onClick={() => onQuickAdd("expense")} style={S.quickItem}>💳 Add expense</button>
-          <button type="button" onClick={() => onQuickAdd("job")} style={S.quickItem}>🔨 Log completed job</button>
+          <button type="button" onClick={() => onQuickAdd("newActiveJob")} style={S.quickItem}>🔨 Start a job</button>
+          <button type="button" onClick={() => onQuickAdd("jobExpense")} style={S.quickItem}>🧱 Add job expense</button>
+          <button type="button" onClick={() => onQuickAdd("jobLabour")} style={S.quickItem}>👷 Add job labour</button>
+          <div style={{height:1, background:"#2A2D35", margin:"4px 0"}} />
+          <button type="button" onClick={() => onQuickAdd("book")} style={{...S.quickItem, color:"#888"}}>📋 Book a job (calendar)</button>
+          <button type="button" onClick={() => onQuickAdd("expense")} style={{...S.quickItem, color:"#888"}}>💳 Add business expense</button>
+          <button type="button" onClick={() => onQuickAdd("job")} style={{...S.quickItem, color:"#888"}}>✓ Log completed job</button>
         </div>
       )}
       {undoItem && (
