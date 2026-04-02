@@ -62,7 +62,7 @@ export default function App() {
   const [jobsSubView, setJobsSubView] = useState("active");
   const [viewingActiveJob, setViewingActiveJob] = useState(null);
   const [activeJobForm, setActiveJobForm] = useState({ client:"", job:"", startDate: dateKey(new Date()), expectedRevenue:"" });
-  const [jobExpForm, setJobExpForm] = useState({ date: dateKey(new Date()), amount:"", category:"Materials", note:"" });
+  const [jobExpForm, setJobExpForm] = useState({ date: dateKey(new Date()), amount:"", category:"Materials", note:"", supplier:"" });
   const [jobExpPickerOpen, setJobExpPickerOpen] = useState(false);
   const [jobExpPickerCategory, setJobExpPickerCategory] = useState(null);
   const [addDayToJob, setAddDayToJob] = useState(null);
@@ -159,12 +159,13 @@ export default function App() {
       amount: amt,
       category: jobExpPickerCategory || jobExpForm.category,
       note: jobExpForm.note.trim(),
+      supplier: jobExpForm.supplier.trim(),
     };
     const updated = activeJobs.map(j => j.id === jobId ? { ...j, expenses: [...j.expenses, expense] } : j);
     saveActiveJobs(updated);
     const updatedJob = updated.find(j => j.id === jobId);
     if (updatedJob) setViewingActiveJob(updatedJob);
-    setJobExpForm({ date: dateKey(new Date()), amount:"", category: jobExpForm.category, note:"" });
+    setJobExpForm({ date: dateKey(new Date()), amount:"", category: jobExpForm.category, note:"", supplier:"" });
     setSaveFlash(true); setTimeout(() => setSaveFlash(false), 1200);
     setJobExpPickerOpen(false); setJobExpPickerCategory(null);
   };
@@ -674,6 +675,12 @@ export default function App() {
     return [...s].sort();
   }, [entries]);
 
+  const knownSuppliers = useMemo(() => {
+    const s = new Set();
+    activeJobs.forEach(aj => aj.expenses.forEach(e => { if (e.supplier?.trim()) s.add(e.supplier.trim()); }));
+    return [...s].sort();
+  }, [activeJobs]);
+
   // Schedule helpers
   const getWeekDays = (monday) => Array.from({length: 7}, (_, i) => { const d = new Date(monday); d.setDate(d.getDate()+i); return d; });
   const weekForecast = useMemo(() => {
@@ -1036,7 +1043,14 @@ export default function App() {
             <div style={S.half}><label style={S.label}>Amount</label><input style={S.input} type="number" inputMode="decimal" placeholder="0" value={jobExpForm.amount} onChange={e => setJobExpForm({...jobExpForm, amount: e.target.value})} /></div>
             <div style={S.half}><label style={S.label}>Date</label><input style={S.input} type="date" value={jobExpForm.date} onChange={e => setJobExpForm({...jobExpForm, date: e.target.value})} /></div>
           </div>
-          <div style={S.fieldGroup}><label style={S.label}>Note (optional)</label><input style={S.input} placeholder="e.g. screws and sealant" value={jobExpForm.note} onChange={e => setJobExpForm({...jobExpForm, note: e.target.value})} /></div>
+          <div style={S.row}>
+            <div style={S.half}>
+              <label style={S.label}>Supplier (optional)</label>
+              <input style={S.input} list="known-suppliers" placeholder="e.g. Screwfix" value={jobExpForm.supplier} onChange={e => setJobExpForm({...jobExpForm, supplier: e.target.value})} />
+              <datalist id="known-suppliers">{knownSuppliers.map(s => <option key={s} value={s} />)}</datalist>
+            </div>
+            <div style={S.half}><label style={S.label}>Note (optional)</label><input style={S.input} placeholder="e.g. screws and sealant" value={jobExpForm.note} onChange={e => setJobExpForm({...jobExpForm, note: e.target.value})} /></div>
+          </div>
           <button onClick={() => addExpenseToJob(aj.id)} style={{...S.saveBtn, ...(saveFlash ? S.saveBtnFlash : {})}}>{saveFlash ? "✓ Added!" : `+ Add ${jobExpForm.category}`}</button>
 
           {/* Days worked */}
@@ -1062,8 +1076,8 @@ export default function App() {
             <div key={exp.id} style={S.expRow}>
               <div style={S.expIcon}>{JOB_CAT_ICONS[exp.category] || "📦"}</div>
               <div style={S.expInfo}>
-                <div style={S.expName}>{exp.note || exp.category}</div>
-                <div style={S.expCat}>{new Date(exp.date+"T12:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"})} · {exp.category}</div>
+                <div style={S.expName}>{exp.note || exp.category}{exp.supplier ? ` — ${exp.supplier}` : ""}</div>
+                <div style={S.expCat}>{new Date(exp.date+"T12:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"})} · {exp.category}{exp.supplier ? ` · ${exp.supplier}` : ""}</div>
               </div>
               <div style={S.expAmount}>{fmt(exp.amount)}</div>
               <button onClick={() => removeJobExpense(aj.id, exp.id)} style={S.expDel}>✕</button>
