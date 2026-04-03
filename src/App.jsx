@@ -137,6 +137,7 @@ export default function App() {
     if (action === "newActiveJob") { setActiveJobForm({ client:"", job:"", startDate: dateKey(new Date()), expectedRevenue:"" }); setView("createActiveJob"); }
     if (action === "jobExpense") { setJobExpPickerCategory(null); setJobExpPickerOpen(true); }
     if (action === "jobLabour") { setJobExpPickerCategory("Labour"); setJobExpPickerOpen(true); }
+    if (action === "viewJobs") { setView("jobs"); }
     if (action === "addClient") { setNewClientName(""); setClientProfileForm({ company:"", address:"", email:"", phone:"" }); setView("addClient"); }
   };
 
@@ -691,8 +692,9 @@ export default function App() {
     const s = new Set();
     Object.values(entries).forEach(e => { if (e.client?.trim()) s.add(e.client.trim()); });
     Object.values(schedule).flat().forEach(s2 => { if (s2.client?.trim()) s.add(s2.client.trim()); });
+    Object.keys(clientProfiles).forEach(n => { if (n.trim()) s.add(n.trim()); });
     return [...s].sort();
-  }, [entries, schedule]);
+  }, [entries, schedule, clientProfiles]);
   const knownJobs = useMemo(() => {
     const s = new Set();
     Object.values(entries).forEach(e => { if (e.job?.trim()) s.add(e.job.trim()); });
@@ -1259,7 +1261,7 @@ export default function App() {
 
             {jobs.length > 0 && (
               <div style={{...S.miniRow, padding: "0 20px 8px"}}>
-                <div style={S.miniCard}><div style={S.miniLabel}>Completed · earned</div><div style={{...S.miniVal, color:"#E67E22"}}>{fmt(totalJobEarnings)}</div></div>
+                <div style={S.miniCard}><div style={S.miniLabel}>Completed · income</div><div style={{...S.miniVal, color:"#E67E22"}}>{fmt(totalJobEarnings)}</div></div>
                 <div style={S.miniCard}><div style={S.miniLabel}>Completed · profit</div><div style={{...S.miniVal, color: totalJobProfit>=0?"#27AE60":"#E74C3C"}}>{fmt(totalJobProfit)}</div></div>
               </div>
             )}
@@ -1282,7 +1284,7 @@ export default function App() {
                 </div>
                 <div style={S.jobCardDates}>{j.dateFrom} → {j.dateTo} · {j.days} days</div>
                 <div style={S.jobCardStats}>
-                  <div style={S.jobCardStat}><span style={S.jobCardStatLbl}>Earned</span>{fmt(j.totalEarnings)}</div>
+                  <div style={S.jobCardStat}><span style={S.jobCardStatLbl}>Income</span>{fmt(j.totalEarnings)}</div>
                   <div style={S.jobCardStat}><span style={S.jobCardStatLbl}>Materials</span>{fmt(j.materials)}</div>
                   <div style={S.jobCardStat}><span style={S.jobCardStatLbl}>Labour</span>{fmt(j.labour)}</div>
                   <div style={S.jobCardStat}><span style={S.jobCardStatLbl}>Fuel</span>{fmt(j.fuel)}</div>
@@ -1911,10 +1913,6 @@ export default function App() {
     return (
       <div style={S.app}>
         <div style={S.dashHeader}><div style={S.dashIcon}>💰</div><div style={S.dashTitle}>Money</div></div>
-        <div style={{ ...S.toggleRow, margin: "0 20px 12px" }}>
-          <button onClick={() => setView("clients")} style={S.toggleBtn}>Clients</button>
-          <button onClick={() => setView("overheads")} style={S.toggleBtnActive}>Business Costs</button>
-        </div>
         <div style={S.overheadSummary}>
           <div style={S.ohCard}><div style={S.ohLabel}>Monthly Recurring</div><div style={S.ohVal}>{fmt(trm)}<span style={S.ohPer}>/mo</span></div></div>
           <div style={S.ohCard}><div style={S.ohLabel}>One-off This Year</div><div style={S.ohVal}>{fmt(too)}</div></div>
@@ -1942,11 +1940,7 @@ export default function App() {
     const maxE = Math.max(...filteredClients.map(c => c.earned), 1);
     return (
       <div style={S.app}>
-        <div style={S.dashHeader}><div style={S.dashIcon}>💰</div><div style={S.dashTitle}>Money</div></div>
-        <div style={{ ...S.toggleRow, margin: "0 20px 12px" }}>
-          <button onClick={() => setView("clients")} style={S.toggleBtnActive}>Clients</button>
-          <button onClick={() => setView("overheads")} style={S.toggleBtn}>Business Costs</button>
-        </div>
+        <div style={S.dashHeader}><div style={S.dashIcon}>👥</div><div style={S.dashTitle}>Clients</div></div>
         {clientStats.length > 0 && (
           <div style={{ padding: "0 20px 8px" }}>
             <input style={S.searchInput} placeholder="Search clients..." value={clientSearch} onChange={e => setClientSearch(e.target.value)} />
@@ -1973,7 +1967,7 @@ export default function App() {
               )}
               <div style={S.clientBar}><div style={{...S.clientBarFill, width:`${(c.earned/maxE)*100}%`}} /></div>
               <div style={S.clientDetails}>
-                <div style={S.clientStat}><span style={S.clientStatLbl}>Earned</span>{fmt(c.earned)}</div>
+                <div style={S.clientStat}><span style={S.clientStatLbl}>Income</span>{fmt(c.earned)}</div>
                 <div style={S.clientStat}><span style={S.clientStatLbl}>Costs</span>{fmt(c.materials+c.labour+c.fuel)}</div>
                 <div style={S.clientStat}><span style={S.clientStatLbl}>£/Hr</span>{fmt(Math.round(c.perHour))}</div>
                 <div style={S.clientStat}><span style={S.clientStatLbl}>Days</span>{c.jobs}</div>
@@ -2162,7 +2156,7 @@ export default function App() {
           <button onClick={() => setSelectedMonth(Math.min(11,mi+1))} style={S.navArrow}>▶</button>
         </div>
         <div style={S.miniDash}>
-          <div style={S.miniRow}><div style={S.miniCard}><div style={S.miniLabel}>Profit</div><div style={{...S.miniVal,color:ms.profit>=0?"#27AE60":"#E74C3C"}}>{fmt(ms.profit)}</div></div><div style={S.miniCard}><div style={S.miniLabel}>Earned</div><div style={{...S.miniVal,color:"#E67E22"}}>{fmt(ms.act)}</div></div></div>
+          <div style={S.miniRow}><div style={S.miniCard}><div style={S.miniLabel}>Profit</div><div style={{...S.miniVal,color:ms.profit>=0?"#27AE60":"#E74C3C"}}>{fmt(ms.profit)}</div></div><div style={S.miniCard}><div style={S.miniLabel}>Income</div><div style={{...S.miniVal,color:"#E67E22"}}>{fmt(ms.act)}</div></div></div>
           <div style={S.miniRow}><div style={S.miniCard}><div style={S.miniLabel}>Estimated</div><div style={S.miniVal}>{fmt(ms.est)}</div></div><div style={S.miniCard}><div style={S.miniLabel}>Hours</div><div style={S.miniVal}>{fmtNum(ms.hrs, 1)}</div></div></div>
           <div style={S.miniRow}><div style={S.miniCard}><div style={S.miniLabel}>Travel Miles</div><div style={S.miniVal}>{fmtNum(ms.miles)}</div></div><div style={S.miniCard}><div style={S.miniLabel}>Overheads</div><div style={{...S.miniVal,color:"#E74C3C",fontSize:16}}>{fmt(monthOverheads[mi])}</div></div></div>
           {ms.act!==ms.est && ms.est>0 && <div style={S.estVsActual}>{ms.act>=ms.est?"▲":"▼"} {Math.abs(((ms.act-ms.est)/ms.est)*100).toFixed(0)}% {ms.act>=ms.est?"above":"below"} estimate</div>}
@@ -2229,7 +2223,7 @@ export default function App() {
       {/* Condensed 3-stat row */}
       <div style={S.statRow}>
         <div style={S.statPill}>
-          <div style={S.statPillLabel}>Earned</div>
+          <div style={S.statPillLabel}>Income</div>
           <div style={{...S.statPillVal, color:"#E67E22"}}>{fmt(yearStats.act)}</div>
         </div>
         <div style={S.statPill}>
@@ -2261,15 +2255,17 @@ export default function App() {
       <div style={S.sectionTitle}>Monthly Profit (after overheads)</div>
       <div style={S.barChart}>
         {MONTHS.map((m, i) => {
+          const currentMonth = new Date().getMonth();
+          const isFuture = i > currentMonth;
           const monthTrueProfit = monthStats[i].profit - monthOverheads[i];
           const maxP = Math.max(...MONTHS.map((_,mi) => Math.abs(monthStats[mi].profit - monthOverheads[mi])), 1);
           const pct = maxP>0?(Math.abs(monthTrueProfit)/maxP)*100:0;
           const isNeg = monthTrueProfit < 0;
           return (
-            <button key={m} onClick={() => { setSelectedMonth(i); setView("month"); }} style={S.barRow}>
-              <div style={S.barLabel}>{m}</div>
-              <div style={S.barTrack}><div style={{...S.barFill,width:`${pct}%`, background: isNeg ? "#E74C3C" : "#27AE60"}} /></div>
-              <div style={{...S.barAmt, color: isNeg ? "#E74C3C" : (monthStats[i].act>0 ? "#27AE60" : "#666")}}>{monthStats[i].act>0||monthOverheads[i]>0?fmt(monthTrueProfit):"—"}</div>
+            <button key={m} onClick={() => { setSelectedMonth(i); setView("month"); }} style={{...S.barRow, opacity: isFuture ? 0.35 : 1}}>
+              <div style={{...S.barLabel, color: isFuture ? "#555" : undefined}}>{m}</div>
+              <div style={S.barTrack}><div style={{...S.barFill, width:`${pct}%`, background: isFuture ? "#444" : (isNeg ? "#E74C3C" : "#27AE60")}} /></div>
+              <div style={{...S.barAmt, color: isFuture ? "#444" : (isNeg ? "#E74C3C" : (monthStats[i].act>0 ? "#27AE60" : "#666"))}}>{isFuture ? "—" : (monthStats[i].act>0||monthOverheads[i]>0?fmt(monthTrueProfit):"—")}</div>
             </button>
           );
         })}
@@ -2300,8 +2296,9 @@ function Nav({ view, setView, openDay, onQuickAdd, quickActionsOpen, setQuickAct
           <div style={{height:1, background:"#2A2D35", margin:"6px 0"}} />
           <div style={S.quickMenuLabel}>Jobs</div>
           <button type="button" onClick={() => onQuickAdd("newActiveJob")} style={S.quickItem}>🔨 Start a job</button>
+          <button type="button" onClick={() => onQuickAdd("viewJobs")} style={S.quickItem}>📋 View all jobs</button>
           <button type="button" onClick={() => onQuickAdd("job")} style={S.quickItem}>✓ Log completed job</button>
-          <button type="button" onClick={() => onQuickAdd("book")} style={S.quickItem}>📋 Book a job (calendar)</button>
+          <button type="button" onClick={() => onQuickAdd("book")} style={S.quickItem}>📆 Book a job (calendar)</button>
           <div style={{height:1, background:"#2A2D35", margin:"6px 0"}} />
           <div style={S.quickMenuLabel}>Other</div>
           <button type="button" onClick={() => onQuickAdd("expense")} style={{...S.quickItem, color:"#aaa"}}>💳 Add business expense</button>
@@ -2334,10 +2331,10 @@ function Nav({ view, setView, openDay, onQuickAdd, quickActionsOpen, setQuickAct
       )}
       <div style={S.bottomNav}>
         <button onClick={() => setView("dashboard")} style={{...S.navBtn,...(view==="dashboard"?S.navActive:{})}}><span style={S.navIcon}>📊</span><span style={S.navTxt}>Home</span></button>
+        <button onClick={() => setView("overheads")} style={{...S.navBtn,...(view==="overheads"?S.navActive:{})}}><span style={S.navIcon}>💰</span><span style={S.navTxt}>Money</span></button>
         <button onClick={() => setView("schedule")} style={{...S.navBtn,...(view==="schedule"||view==="month"?S.navActive:{})}}><span style={S.navIcon}>📆</span><span style={S.navTxt}>Calendar</span></button>
         <button onClick={() => setQuickActionsOpen(!quickActionsOpen)} style={S.navAdd}><span style={{fontSize:28,lineHeight:1}}>{quickActionsOpen ? "×" : "+"}</span></button>
-        <button onClick={() => setView("jobs")} style={{...S.navBtn,...(view==="jobs"?S.navActive:{})}}><span style={S.navIcon}>🔨</span><span style={S.navTxt}>Jobs</span></button>
-        <button onClick={() => setView("clients")} style={{...S.navBtn,...(view==="clients"||view==="overheads"?S.navActive:{})}}><span style={S.navIcon}>💰</span><span style={S.navTxt}>Money</span></button>
+        <button onClick={() => setView("clients")} style={{...S.navBtn,...(view==="clients"||view==="editClientProfile"||view==="addClient"?S.navActive:{})}}><span style={S.navIcon}>👥</span><span style={S.navTxt}>Clients</span></button>
         <button onClick={() => setView("settings")} style={{...S.navBtn,...(view==="settings"?S.navActive:{})}}><span style={S.navIcon}>⚙️</span><span style={S.navTxt}>Settings</span></button>
       </div>
     </>
