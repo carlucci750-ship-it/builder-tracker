@@ -11,7 +11,7 @@ const CURRENCIES = {
   EUR: { label: "Euro (EUR)", symbol: "€", locale: "de-DE" },
   USD: { label: "US Dollar (USD)", symbol: "$", locale: "en-US" },
 };
-const defaultSettings = () => ({ currency: "GBP" });
+const defaultSettings = () => ({ currency: "GBP", businessName: "", businessAddress: "", businessPhone: "", businessEmail: "", bankName: "", bankAccount: "", bankSortCode: "", vatNumber: "" });
 const JOB_EXPENSE_CATS = ["Materials","Fuel","Tools/Parts","Labour","Other"];
 const JOB_CAT_ICONS = {"Materials":"🧱","Fuel":"⛽","Tools/Parts":"🔧","Labour":"👷","Other":"📦"};
 
@@ -59,6 +59,9 @@ export default function App() {
   const [jobSearch, setJobSearch] = useState("");
   const touchStartRef = useRef(null);
   const [activeJobs, setActiveJobs] = useState([]);
+  const [clientProfiles, setClientProfiles] = useState({});
+  const [editingClientProfile, setEditingClientProfile] = useState(null);
+  const [clientProfileForm, setClientProfileForm] = useState({ company:"", address:"", email:"", phone:"" });
   const [jobsSubView, setJobsSubView] = useState("active");
   const [viewingActiveJob, setViewingActiveJob] = useState(null);
   const [activeJobForm, setActiveJobForm] = useState({ client:"", job:"", startDate: dateKey(new Date()), expectedRevenue:"" });
@@ -97,8 +100,8 @@ export default function App() {
   }, [entries]);
 
   useEffect(() => {
-    Promise.all([load("builder-entries",{}), load("builder-expenses",[]), load("builder-recurring",[]), load("builder-schedule",{}), load("builder-jobs",[]), load("builder-settings", defaultSettings()), load("builder-active-jobs",[])]).then(([e,ex,rc,sc,jb,st,aj]) => {
-      setEntries(e); setExpenses(ex); setRecurring(rc); setSchedule(sc); setJobs(jb); setSettings({ ...defaultSettings(), ...(st || {}) }); setActiveJobs(aj || []); setLoaded(true);
+    Promise.all([load("builder-entries",{}), load("builder-expenses",[]), load("builder-recurring",[]), load("builder-schedule",{}), load("builder-jobs",[]), load("builder-settings", defaultSettings()), load("builder-active-jobs",[]), load("builder-client-profiles",{})]).then(([e,ex,rc,sc,jb,st,aj,cp]) => {
+      setEntries(e); setExpenses(ex); setRecurring(rc); setSchedule(sc); setJobs(jb); setSettings({ ...defaultSettings(), ...(st || {}) }); setActiveJobs(aj || []); setClientProfiles(cp || {}); setLoaded(true);
     });
   }, []);
 
@@ -109,6 +112,7 @@ export default function App() {
   const saveJobs = (j) => { setJobs(j); save("builder-jobs", j); };
   const saveActiveJobs = (aj) => { setActiveJobs(aj); save("builder-active-jobs", aj); };
   const saveSettings = (s) => { setSettings(s); save("builder-settings", s); };
+  const saveClientProfiles = (cp) => { setClientProfiles(cp); save("builder-client-profiles", cp); };
 
   const updateForm = (f, v) => setForm(p => ({ ...p, [f]: v }));
   const updateSetting = (f, v) => saveSettings({ ...settings, [f]: v });
@@ -317,6 +321,7 @@ export default function App() {
       schedule,
       jobs,
       activeJobs,
+      clientProfiles,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -340,6 +345,7 @@ export default function App() {
       const nextJobs = Array.isArray(data.jobs) ? data.jobs : [];
       const nextActiveJobs = Array.isArray(data.activeJobs) ? data.activeJobs : [];
       const nextSettings = { ...defaultSettings(), ...(data.settings || {}) };
+      const nextClientProfiles = data.clientProfiles && typeof data.clientProfiles === "object" ? data.clientProfiles : {};
       saveEntries(nextEntries);
       saveExpenses(nextExpenses);
       saveRecurring(nextRecurring);
@@ -347,6 +353,7 @@ export default function App() {
       saveJobs(nextJobs);
       saveActiveJobs(nextActiveJobs);
       saveSettings(nextSettings);
+      saveClientProfiles(nextClientProfiles);
       setView("dashboard");
       setSaveFlash(true); setTimeout(() => setSaveFlash(false), 1200);
       showToast("Backup imported.");
@@ -358,7 +365,7 @@ export default function App() {
   };
 
   const resetAllData = () => {
-    const snapshot = { entries, expenses, recurring, schedule, jobs, settings, activeJobs };
+    const snapshot = { entries, expenses, recurring, schedule, jobs, settings, activeJobs, clientProfiles };
     saveEntries({});
     saveExpenses([]);
     saveRecurring([]);
@@ -366,6 +373,7 @@ export default function App() {
     saveJobs([]);
     saveActiveJobs([]);
     saveSettings(defaultSettings());
+    saveClientProfiles({});
     setForm(defaultEntry());
     setExpForm({ category: EXPENSE_CATEGORIES[0], description:"", amount:"", date: dateKey(new Date()), isRecurring: false, recurringMonthly:"", spreadOverYear: false });
     setSchedForm([defaultScheduleItem()]);
@@ -381,6 +389,7 @@ export default function App() {
       saveJobs(snapshot.jobs);
       saveActiveJobs(snapshot.activeJobs);
       saveSettings(snapshot.settings);
+      saveClientProfiles(snapshot.clientProfiles || {});
     });
   };
 
@@ -1925,18 +1934,72 @@ export default function App() {
         )}
         {clientStats.length === 0 && <div style={S.emptyWrap}><div style={{fontSize:40,marginBottom:12}}>📋</div><div style={S.emptyText}>No client data yet</div><div style={{...S.emptyText,fontSize:12,marginTop:4}}>Add a client name to your daily entries</div></div>}
         {filteredClients.length === 0 && clientStats.length > 0 && <div style={S.emptyText}>No clients match "{clientSearch}"</div>}
-        {filteredClients.map((c, i) => (
-          <div key={c.name} style={S.clientCard}>
-            <div style={S.clientHeader}><div style={S.clientRank}>#{i+1}</div><div style={S.clientName}>{c.name}</div><div style={{...S.clientProfit, color: c.profit>=0?"#27AE60":"#E74C3C"}}>{fmt(c.profit)}</div></div>
-            <div style={S.clientBar}><div style={{...S.clientBarFill, width:`${(c.earned/maxE)*100}%`}} /></div>
-            <div style={S.clientDetails}>
-              <div style={S.clientStat}><span style={S.clientStatLbl}>Earned</span>{fmt(c.earned)}</div>
-              <div style={S.clientStat}><span style={S.clientStatLbl}>Costs</span>{fmt(c.materials+c.labour+c.fuel)}</div>
-              <div style={S.clientStat}><span style={S.clientStatLbl}>£/Hr</span>{fmt(Math.round(c.perHour))}</div>
-              <div style={S.clientStat}><span style={S.clientStatLbl}>Days</span>{c.jobs}</div>
+        {filteredClients.map((c, i) => {
+          const cp = clientProfiles[c.name] || {};
+          return (
+            <div key={c.name} style={S.clientCard}>
+              <div style={S.clientHeader}>
+                <div style={S.clientRank}>#{i+1}</div>
+                <div style={{...S.clientName, flex:1}}>{c.name}</div>
+                <button onClick={() => { setEditingClientProfile(c.name); setClientProfileForm({ company: cp.company||"", address: cp.address||"", email: cp.email||"", phone: cp.phone||"" }); setView("editClientProfile"); }} style={{ background:"none", border:"none", color:"#888", fontSize:13, cursor:"pointer", padding:"2px 6px", fontFamily:"inherit" }}>Edit</button>
+                <div style={{...S.clientProfit, color: c.profit>=0?"#27AE60":"#E74C3C"}}>{fmt(c.profit)}</div>
+              </div>
+              {(cp.address||cp.email||cp.phone) && (
+                <div style={{ fontSize:11, color:"#888", padding:"2px 0 6px", lineHeight:1.6 }}>
+                  {cp.address && <div>{cp.address}</div>}
+                  {cp.email && <div>{cp.email}</div>}
+                  {cp.phone && <div>{cp.phone}</div>}
+                </div>
+              )}
+              <div style={S.clientBar}><div style={{...S.clientBarFill, width:`${(c.earned/maxE)*100}%`}} /></div>
+              <div style={S.clientDetails}>
+                <div style={S.clientStat}><span style={S.clientStatLbl}>Earned</span>{fmt(c.earned)}</div>
+                <div style={S.clientStat}><span style={S.clientStatLbl}>Costs</span>{fmt(c.materials+c.labour+c.fuel)}</div>
+                <div style={S.clientStat}><span style={S.clientStatLbl}>£/Hr</span>{fmt(Math.round(c.perHour))}</div>
+                <div style={S.clientStat}><span style={S.clientStatLbl}>Days</span>{c.jobs}</div>
+              </div>
             </div>
+          );
+        })}
+        <Nav {...navProps} />
+      </div>
+    );
+  }
+
+  // ═══ EDIT CLIENT PROFILE ═══
+  if (view === "editClientProfile") {
+    const saveClientProfile = () => {
+      const updated = { ...clientProfiles, [editingClientProfile]: { ...clientProfileForm } };
+      saveClientProfiles(updated);
+      setView("clients");
+      showToast("Client details saved.");
+    };
+    return (
+      <div style={S.app}>
+        <div style={S.entryHeader}>
+          <button onClick={() => setView("clients")} style={S.backBtn}>← Back</button>
+          <div style={S.entryTitle}>{editingClientProfile}</div>
+        </div>
+        <div style={S.formWrap}>
+          <div style={{ fontSize: 13, color: "#E67E22", fontWeight: 700, marginBottom: 10 }}>Client Details</div>
+          <div style={S.fieldGroup}>
+            <label style={S.label}>Company Name (optional)</label>
+            <input style={S.input} placeholder="e.g. Smith Renovations Ltd" value={clientProfileForm.company} onChange={e => setClientProfileForm(p => ({...p, company: e.target.value}))} />
           </div>
-        ))}
+          <div style={S.fieldGroup}>
+            <label style={S.label}>Address</label>
+            <input style={S.input} placeholder="e.g. 45 High Street, Leeds, LS1 1AA" value={clientProfileForm.address} onChange={e => setClientProfileForm(p => ({...p, address: e.target.value}))} />
+          </div>
+          <div style={S.fieldGroup}>
+            <label style={S.label}>Email</label>
+            <input style={S.input} type="email" placeholder="client@email.com" value={clientProfileForm.email} onChange={e => setClientProfileForm(p => ({...p, email: e.target.value}))} />
+          </div>
+          <div style={S.fieldGroup}>
+            <label style={S.label}>Phone</label>
+            <input style={S.input} placeholder="07700 000000" value={clientProfileForm.phone} onChange={e => setClientProfileForm(p => ({...p, phone: e.target.value}))} />
+          </div>
+          <button onClick={saveClientProfile} style={{...S.saveBtn, ...(saveFlash ? S.saveBtnFlash : {})}}>Save Details</button>
+        </div>
         <Nav {...navProps} />
       </div>
     );
@@ -1949,8 +2012,51 @@ export default function App() {
         <div style={S.dashHeader}><div style={S.dashIcon}>⚙️</div><div style={S.dashTitle}>Settings</div></div>
 
         <div style={S.formWrap}>
+          <div style={{ fontSize: 13, color: "#E67E22", fontWeight: 700, marginBottom: 10 }}>Your Business</div>
           <div style={S.fieldGroup}>
-            <label style={S.label}>Currency</label>
+            <label style={S.label}>Business / Trading Name</label>
+            <input style={S.input} placeholder="e.g. Smith Builders Ltd" value={settings.businessName||""} onChange={e => updateSetting("businessName", e.target.value)} />
+          </div>
+          <div style={S.fieldGroup}>
+            <label style={S.label}>Address</label>
+            <input style={S.input} placeholder="e.g. 12 Oak Road, Manchester, M1 1AA" value={settings.businessAddress||""} onChange={e => updateSetting("businessAddress", e.target.value)} />
+          </div>
+          <div style={{ display:"flex", gap:10 }}>
+            <div style={{...S.fieldGroup, flex:1}}>
+              <label style={S.label}>Phone</label>
+              <input style={S.input} placeholder="07700 000000" value={settings.businessPhone||""} onChange={e => updateSetting("businessPhone", e.target.value)} />
+            </div>
+            <div style={{...S.fieldGroup, flex:1}}>
+              <label style={S.label}>Email</label>
+              <input style={S.input} placeholder="you@email.com" value={settings.businessEmail||""} onChange={e => updateSetting("businessEmail", e.target.value)} />
+            </div>
+          </div>
+          <div style={S.fieldGroup}>
+            <label style={S.label}>VAT Number (optional)</label>
+            <input style={S.input} placeholder="GB 123 4567 89" value={settings.vatNumber||""} onChange={e => updateSetting("vatNumber", e.target.value)} />
+          </div>
+
+          <div style={S.divider} />
+          <div style={{ fontSize: 13, color: "#E67E22", fontWeight: 700, marginBottom: 10 }}>Bank / Payment Details</div>
+          <div style={S.fieldGroup}>
+            <label style={S.label}>Bank Name</label>
+            <input style={S.input} placeholder="e.g. Barclays" value={settings.bankName||""} onChange={e => updateSetting("bankName", e.target.value)} />
+          </div>
+          <div style={{ display:"flex", gap:10 }}>
+            <div style={{...S.fieldGroup, flex:1}}>
+              <label style={S.label}>Account Number</label>
+              <input style={S.input} placeholder="12345678" value={settings.bankAccount||""} onChange={e => updateSetting("bankAccount", e.target.value)} />
+            </div>
+            <div style={{...S.fieldGroup, flex:1}}>
+              <label style={S.label}>Sort Code</label>
+              <input style={S.input} placeholder="00-00-00" value={settings.bankSortCode||""} onChange={e => updateSetting("bankSortCode", e.target.value)} />
+            </div>
+          </div>
+          <div style={S.settingsHelp}>These details appear on invoices you generate.</div>
+
+          <div style={S.divider} />
+          <div style={{ fontSize: 13, color: "#E67E22", fontWeight: 700, marginBottom: 10 }}>Currency</div>
+          <div style={S.fieldGroup}>
             <select style={S.input} value={settings.currency} onChange={(e) => updateSetting("currency", e.target.value)}>
               {Object.entries(CURRENCIES).map(([code, cfg]) => <option key={code} value={code}>{cfg.label}</option>)}
             </select>
