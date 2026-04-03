@@ -2261,11 +2261,12 @@ export default function App() {
           const maxP = Math.max(...MONTHS.map((_,mi) => Math.abs(monthStats[mi].profit - monthOverheads[mi])), 1);
           const pct = maxP>0?(Math.abs(monthTrueProfit)/maxP)*100:0;
           const isNeg = monthTrueProfit < 0;
+          const hasData = monthStats[i].act > 0 || monthOverheads[i] > 0;
           return (
-            <button key={m} onClick={() => { setSelectedMonth(i); setView("month"); }} style={{...S.barRow, opacity: isFuture ? 0.35 : 1}}>
-              <div style={{...S.barLabel, color: isFuture ? "#555" : undefined}}>{m}</div>
-              <div style={S.barTrack}><div style={{...S.barFill, width:`${pct}%`, background: isFuture ? "#444" : (isNeg ? "#E74C3C" : "#27AE60")}} /></div>
-              <div style={{...S.barAmt, color: isFuture ? "#444" : (isNeg ? "#E74C3C" : (monthStats[i].act>0 ? "#27AE60" : "#666"))}}>{isFuture ? "—" : (monthStats[i].act>0||monthOverheads[i]>0?fmt(monthTrueProfit):"—")}</div>
+            <button key={m} onClick={() => { setSelectedMonth(i); setView("month"); }} style={{...S.barRow, opacity: isFuture ? 0.5 : 1}}>
+              <div style={S.barLabel}>{m}</div>
+              <div style={S.barTrack}><div style={{...S.barFill, width:`${pct}%`, background: isFuture ? "#555" : (isNeg ? "#E74C3C" : "#27AE60")}} /></div>
+              <div style={{...S.barAmt, color: isFuture ? "#666" : (isNeg ? "#E74C3C" : (monthStats[i].act>0 ? "#27AE60" : "#666"))}}>{hasData ? fmt(monthTrueProfit) : "—"}</div>
             </button>
           );
         })}
