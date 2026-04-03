@@ -1961,9 +1961,9 @@ export default function App() {
               <div style={S.clientHeader}>
                 <div style={S.clientRank}>#{i+1}</div>
                 <div style={{...S.clientName, flex:1}}>{c.name}</div>
-                <button onClick={() => { setEditingClientProfile(c.name); setClientProfileForm({ company: cp.company||"", address: cp.address||"", email: cp.email||"", phone: cp.phone||"" }); setView("editClientProfile"); }} style={{ background:"none", border:"none", color:"#888", fontSize:13, cursor:"pointer", padding:"2px 6px", fontFamily:"inherit" }}>Edit</button>
-                <div style={{...S.clientProfit, color: c.profit>=0?"#27AE60":"#E74C3C"}}>{fmt(c.profit)}</div>
+                <button onClick={() => { setEditingClientProfile(c.name); setClientProfileForm({ company: cp.company||"", address: cp.address||"", email: cp.email||"", phone: cp.phone||"" }); setView("editClientProfile"); }} style={{ background:"none", border:"none", color:"#555", fontSize:16, cursor:"pointer", padding:"2px 6px", fontFamily:"inherit", lineHeight:1 }}>✎</button>
               </div>
+              <div style={{...S.clientProfit, color: c.profit>=0?"#27AE60":"#E74C3C", marginBottom:6}}>{fmt(c.profit)} <span style={{fontSize:12, color:"#666", fontWeight:500}}>profit</span></div>
               {(cp.address||cp.email||cp.phone) && (
                 <div style={{ fontSize:11, color:"#888", padding:"2px 0 6px", lineHeight:1.6 }}>
                   {cp.address && <div>{cp.address}</div>}
@@ -2218,15 +2218,46 @@ export default function App() {
   return (
     <div style={S.app}>
       <div style={S.dashHeader}><div style={S.dashIcon}>🏗️</div><div style={S.dashTitle}>Builder Tracker</div><div style={S.dashYear}>{YEAR} · claude v3</div></div>
-      <div style={S.summaryGrid}>
-        <div style={{...S.sumCard,...S.sumCardWide,background:yearStats.trueProfit>=0?"rgba(39,174,96,0.1)":"rgba(231,76,60,0.1)",border:`1px solid ${yearStats.trueProfit>=0?"rgba(39,174,96,0.3)":"rgba(231,76,60,0.3)"}`}}><div style={S.sumLabel}>True Profit</div><div style={{...S.sumBig,color:yearStats.trueProfit>=0?"#27AE60":"#E74C3C"}}>{fmt(yearStats.trueProfit)}</div><div style={S.sumSub}>after all costs & overheads</div></div>
-        <div style={S.sumCard}><div style={S.sumLabel}>Earned</div><div style={{...S.sumMed,color:"#E67E22"}}>{fmt(yearStats.act)}</div></div>
-        <div style={S.sumCard}><div style={S.sumLabel}>Job Costs</div><div style={{...S.sumMed,color:"#E74C3C"}}>{fmt(yearStats.mat+yearStats.lab+yearStats.fuel)}</div></div>
-        <div style={S.sumCard}><div style={S.sumLabel}>Monthly Overheads</div><div style={{...S.sumMed,color:"#E74C3C"}}>{fmt(yearStats.monthlyOverheads)}<span style={{fontSize:11,color:"#888"}}>/mo</span></div></div>
-        <div style={S.sumCard}><div style={S.sumLabel}>One-off Expenses</div><div style={{...S.sumMed,color:"#E74C3C"}}>{fmt(yearStats.oneOffs)}</div></div>
-        <div style={S.sumCard}><div style={S.sumLabel}>Profit £/Hr</div><div style={S.sumMed}>{fmt(Math.round(yearStats.avgHourly))}</div></div>
-        <div style={S.sumCard}><div style={S.sumLabel}>Days Worked</div><div style={S.sumMed}>{yearStats.days}</div></div>
+
+      {/* Hero profit card */}
+      <div style={{...S.heroCard, background: yearStats.trueProfit >= 0 ? "linear-gradient(135deg,rgba(39,174,96,0.15),rgba(39,174,96,0.05))" : "linear-gradient(135deg,rgba(231,76,60,0.15),rgba(231,76,60,0.05))", borderColor: yearStats.trueProfit >= 0 ? "rgba(39,174,96,0.3)" : "rgba(231,76,60,0.3)"}}>
+        <div style={S.heroLabel}>True Profit {YEAR}</div>
+        <div style={{...S.heroAmount, color: yearStats.trueProfit >= 0 ? "#27AE60" : "#E74C3C"}}>{fmt(yearStats.trueProfit)}</div>
+        <div style={S.heroSub}>after all costs & overheads</div>
       </div>
+
+      {/* Condensed 3-stat row */}
+      <div style={S.statRow}>
+        <div style={S.statPill}>
+          <div style={S.statPillLabel}>Earned</div>
+          <div style={{...S.statPillVal, color:"#E67E22"}}>{fmt(yearStats.act)}</div>
+        </div>
+        <div style={S.statPill}>
+          <div style={S.statPillLabel}>Job Costs</div>
+          <div style={{...S.statPillVal, color:"#E74C3C"}}>{fmt(yearStats.mat+yearStats.lab+yearStats.fuel)}</div>
+        </div>
+        <div style={S.statPill}>
+          <div style={S.statPillLabel}>Days Out</div>
+          <div style={S.statPillVal}>{yearStats.days}</div>
+        </div>
+      </div>
+
+      {/* Secondary stats row */}
+      <div style={S.statRow}>
+        <div style={S.statPill}>
+          <div style={S.statPillLabel}>Overheads</div>
+          <div style={{...S.statPillVal, color:"#E74C3C", fontSize:15}}>{fmt(yearStats.monthlyOverheads)}<span style={{fontSize:10,color:"#888"}}>/mo</span></div>
+        </div>
+        <div style={S.statPill}>
+          <div style={S.statPillLabel}>One-offs</div>
+          <div style={{...S.statPillVal, color:"#E74C3C", fontSize:15}}>{fmt(yearStats.oneOffs)}</div>
+        </div>
+        <div style={S.statPill}>
+          <div style={S.statPillLabel}>Profit/Hr</div>
+          <div style={S.statPillVal}>{fmt(Math.round(yearStats.avgHourly))}</div>
+        </div>
+      </div>
+
       <div style={S.sectionTitle}>Monthly Profit (after overheads)</div>
       <div style={S.barChart}>
         {MONTHS.map((m, i) => {
@@ -2244,10 +2275,10 @@ export default function App() {
         })}
       </div>
       <div style={S.legendRow}><div style={S.legendItem}><div style={{...S.legendDot,background:"#27AE60"}} />Profit</div><div style={S.legendItem}><div style={{...S.legendDot,background:"#E74C3C"}} />Loss</div></div>
-      {clientStats.length > 0 && (
+      {clientStats.filter(c => c.earned > 0).length > 0 && (
         <>
           <button onClick={() => setView("clients")} style={S.sectionTitleBtn}><span>Top Clients</span><span style={{color:"#E67E22"}}>View all →</span></button>
-          {clientStats.slice(0,3).map(c => <div key={c.name} style={S.clientMini}><div style={S.clientMiniName}>{c.name}</div><div style={{...S.clientMiniProfit,color:c.profit>=0?"#27AE60":"#E74C3C"}}>{fmt(c.profit)}</div></div>)}
+          {clientStats.filter(c => c.earned > 0).slice(0,3).map(c => <div key={c.name} style={S.clientMini}><div style={S.clientMiniName}>{c.name}</div><div style={{...S.clientMiniProfit,color:c.profit>=0?"#27AE60":"#E74C3C"}}>{fmt(c.profit)}</div></div>)}
         </>
       )}
       <div style={{height:40}} />
@@ -2262,15 +2293,19 @@ function Nav({ view, setView, openDay, onQuickAdd, quickActionsOpen, setQuickAct
       {quickActionsOpen && <button type="button" onClick={() => setQuickActionsOpen(false)} style={S.quickOverlay} aria-label="Close quick actions" />}
       {quickActionsOpen && (
         <div style={S.quickMenu}>
+          <div style={S.quickMenuLabel}>Daily</div>
           <button type="button" onClick={() => onQuickAdd("entry")} style={S.quickItem}>➕ Add today's entry</button>
-          <button type="button" onClick={() => onQuickAdd("newActiveJob")} style={S.quickItem}>🔨 Start a job</button>
           <button type="button" onClick={() => onQuickAdd("jobExpense")} style={S.quickItem}>🧱 Add job expense</button>
           <button type="button" onClick={() => onQuickAdd("jobLabour")} style={S.quickItem}>👷 Add job labour</button>
-          <div style={{height:1, background:"#2A2D35", margin:"4px 0"}} />
-          <button type="button" onClick={() => onQuickAdd("book")} style={{...S.quickItem, color:"#888"}}>📋 Book a job (calendar)</button>
-          <button type="button" onClick={() => onQuickAdd("expense")} style={{...S.quickItem, color:"#888"}}>💳 Add business expense</button>
-          <button type="button" onClick={() => onQuickAdd("job")} style={{...S.quickItem, color:"#888"}}>✓ Log completed job</button>
-          <button type="button" onClick={() => onQuickAdd("addClient")} style={{...S.quickItem, color:"#888"}}>👤 Add client</button>
+          <div style={{height:1, background:"#2A2D35", margin:"6px 0"}} />
+          <div style={S.quickMenuLabel}>Jobs</div>
+          <button type="button" onClick={() => onQuickAdd("newActiveJob")} style={S.quickItem}>🔨 Start a job</button>
+          <button type="button" onClick={() => onQuickAdd("job")} style={S.quickItem}>✓ Log completed job</button>
+          <button type="button" onClick={() => onQuickAdd("book")} style={S.quickItem}>📋 Book a job (calendar)</button>
+          <div style={{height:1, background:"#2A2D35", margin:"6px 0"}} />
+          <div style={S.quickMenuLabel}>Other</div>
+          <button type="button" onClick={() => onQuickAdd("expense")} style={{...S.quickItem, color:"#aaa"}}>💳 Add business expense</button>
+          <button type="button" onClick={() => onQuickAdd("addClient")} style={{...S.quickItem, color:"#aaa"}}>👤 Add client</button>
         </div>
       )}
       {undoItem && (
@@ -2402,6 +2437,14 @@ const S = {
   toggleRow: { display: "flex", gap: 0, marginBottom: 12, borderRadius: 8, overflow: "hidden", border: "2px solid #2A2D35" },
   toggleBtn: { flex: 1, padding: "10px", background: "#22252C", border: "none", color: "#888", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" },
   toggleBtnActive: { flex: 1, padding: "10px", background: "#E67E22", border: "none", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" },
+  heroCard: { margin: "0 20px 12px", borderRadius: 16, padding: "20px", border: "1px solid", textAlign: "center" },
+  heroLabel: { fontSize: 11, color: "#888", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 },
+  heroAmount: { fontSize: 44, fontWeight: 900, lineHeight: 1, marginBottom: 4 },
+  heroSub: { fontSize: 12, color: "#666" },
+  statRow: { display: "flex", gap: 8, padding: "0 20px 10px" },
+  statPill: { flex: 1, background: "#22252C", borderRadius: 12, padding: "10px 8px", textAlign: "center" },
+  statPillLabel: { fontSize: 9, color: "#666", textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, marginBottom: 3 },
+  statPillVal: { fontSize: 16, fontWeight: 800, color: "#F0F0F0" },
   clientCard: { margin: "8px 20px", background: "#22252C", borderRadius: 12, padding: "14px 16px" },
   clientHeader: { display: "flex", alignItems: "center", gap: 8 },
   clientRank: { fontSize: 12, color: "#555", fontWeight: 700, width: 24 },
@@ -2483,7 +2526,8 @@ const S = {
   calCellClient: { fontSize: 7, color: "#888", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" },
   quickOverlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", border: "none", zIndex: 120 },
   quickMenu: { position: "fixed", left: "50%", bottom: 84, transform: "translateX(-50%)", width: "calc(100% - 40px)", maxWidth: 440, background: "#22252C", border: "1px solid #2A2D35", borderRadius: 14, padding: 10, zIndex: 130, boxShadow: "0 8px 30px rgba(0,0,0,0.35)" },
-  quickItem: { width: "100%", textAlign: "left", padding: "12px 12px", background: "transparent", border: "none", color: "#F0F0F0", fontSize: 14, fontWeight: 600, borderRadius: 8, cursor: "pointer", fontFamily: "inherit" },
+  quickMenuLabel: { fontSize: 9, fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: 1, padding: "4px 12px 2px" },
+  quickItem: { width: "100%", textAlign: "left", padding: "11px 12px", background: "transparent", border: "none", color: "#F0F0F0", fontSize: 14, fontWeight: 600, borderRadius: 8, cursor: "pointer", fontFamily: "inherit" },
   undoBar: { position: "fixed", left: "50%", transform: "translateX(-50%)", bottom: 86, width: "calc(100% - 40px)", maxWidth: 440, background: "#0F1116", border: "1px solid #2A2D35", borderRadius: 12, padding: "10px 12px", display: "flex", alignItems: "center", justifyContent: "space-between", zIndex: 125, boxShadow: "0 8px 26px rgba(0,0,0,0.35)" },
   undoTxt: { fontSize: 13, color: "#B9BDC7", fontWeight: 600 },
   undoBtn: { background: "rgba(230,126,34,0.15)", border: "1px solid #E67E22", color: "#E67E22", borderRadius: 8, padding: "6px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" },
