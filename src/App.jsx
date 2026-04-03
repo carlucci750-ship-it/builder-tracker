@@ -62,6 +62,7 @@ export default function App() {
   const [clientProfiles, setClientProfiles] = useState({});
   const [editingClientProfile, setEditingClientProfile] = useState(null);
   const [clientProfileForm, setClientProfileForm] = useState({ company:"", address:"", email:"", phone:"" });
+  const [newClientName, setNewClientName] = useState("");
   const [jobsSubView, setJobsSubView] = useState("active");
   const [viewingActiveJob, setViewingActiveJob] = useState(null);
   const [activeJobForm, setActiveJobForm] = useState({ client:"", job:"", startDate: dateKey(new Date()), expectedRevenue:"" });
@@ -136,7 +137,7 @@ export default function App() {
     if (action === "newActiveJob") { setActiveJobForm({ client:"", job:"", startDate: dateKey(new Date()), expectedRevenue:"" }); setView("createActiveJob"); }
     if (action === "jobExpense") { setJobExpPickerCategory(null); setJobExpPickerOpen(true); }
     if (action === "jobLabour") { setJobExpPickerCategory("Labour"); setJobExpPickerOpen(true); }
-    if (action === "addClient") { setEditingClientProfile(""); setClientProfileForm({ company:"", address:"", email:"", phone:"" }); setView("addClient"); }
+    if (action === "addClient") { setNewClientName(""); setClientProfileForm({ company:"", address:"", email:"", phone:"" }); setView("addClient"); }
   };
 
   const createActiveJob = () => {
@@ -604,8 +605,10 @@ export default function App() {
       if (!cl[n]) cl[n] = { earned:0, materials:0, labour:0, hours:0, fuel:0, jobs:0 };
       cl[n].earned+=Number(e.actual)||0; cl[n].materials+=Number(e.materials)||0; cl[n].labour+=Number(e.labour)||0; cl[n].hours+=Number(e.hours)||0; cl[n].fuel+=Number(e.fuelCost)||0; cl[n].jobs++;
     });
+    // Include manually-added clients even if they have no diary entries yet
+    Object.keys(clientProfiles).forEach(n => { if (!cl[n]) cl[n] = { earned:0, materials:0, labour:0, hours:0, fuel:0, jobs:0 }; });
     return Object.entries(cl).map(([name, s]) => ({ name, ...s, profit: s.earned-s.materials-s.labour-s.fuel, perHour: s.hours>0 ? (s.earned-s.materials-s.labour-s.fuel)/s.hours : 0 })).sort((a,b) => b.profit-a.profit);
-  }, [entries]);
+  }, [entries, clientProfiles]);
 
   const yearStats = useMemo(() => {
     const s = { est:0,act:0,mat:0,lab:0,hrs:0,days:0,miles:0,fuel:0 };
@@ -1969,7 +1972,6 @@ export default function App() {
 
   // ═══ ADD CLIENT ═══
   if (view === "addClient") {
-    const [newClientName, setNewClientName] = useState("");
     const saveNewClient = () => {
       const name = newClientName.trim();
       if (!name) return;
