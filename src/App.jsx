@@ -2335,6 +2335,7 @@ function Nav({ view, setView, openDay, onQuickAdd, quickActionsOpen, setQuickAct
         <button onClick={() => setView("schedule")} style={{...S.navBtn,...(view==="schedule"||view==="month"?S.navActive:{})}}><span style={S.navIcon}>📆</span><span style={S.navTxt}>Calendar</span></button>
         <button onClick={() => setQuickActionsOpen(!quickActionsOpen)} style={S.navAdd}><span style={{fontSize:28,lineHeight:1}}>{quickActionsOpen ? "×" : "+"}</span></button>
         <button onClick={() => setView("clients")} style={{...S.navBtn,...(view==="clients"||view==="editClientProfile"||view==="addClient"?S.navActive:{})}}><span style={S.navIcon}>👥</span><span style={S.navTxt}>Clients</span></button>
+        <button onClick={() => setView("jobs")} style={{...S.navBtn,...(view==="jobs"||view==="activeJobDetail"||view==="createActiveJob"?S.navActive:{})}}><span style={S.navIcon}>🔨</span><span style={S.navTxt}>Jobs</span></button>
         <button onClick={() => setView("settings")} style={{...S.navBtn,...(view==="settings"?S.navActive:{})}}><span style={S.navIcon}>⚙️</span><span style={S.navTxt}>Settings</span></button>
       </div>
     </>
@@ -2529,9 +2530,9 @@ const S = {
   undoTxt: { fontSize: 13, color: "#B9BDC7", fontWeight: 600 },
   undoBtn: { background: "rgba(230,126,34,0.15)", border: "1px solid #E67E22", color: "#E67E22", borderRadius: 8, padding: "6px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" },
   bottomNav: { position: "fixed", bottom: 0, left: 0, right: 0, display: "flex", justifyContent: "space-evenly", alignItems: "center", background: "#16181D", borderTop: "1px solid #2A2D35", padding: "6px 0 18px", zIndex: 100, maxWidth: 480, margin: "0 auto" },
-  navBtn: { background: "none", border: "none", color: "#555", display: "flex", flexDirection: "column", alignItems: "center", gap: 1, cursor: "pointer", padding: "4px 6px", fontFamily: "inherit" },
+  navBtn: { background: "none", border: "none", color: "#555", display: "flex", flexDirection: "column", alignItems: "center", gap: 1, cursor: "pointer", padding: "4px 3px", fontFamily: "inherit" },
   navActive: { color: "#E67E22" },
-  navIcon: { fontSize: 18 }, navTxt: { fontSize: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 },
+  navIcon: { fontSize: 17 }, navTxt: { fontSize: 8, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.3 },
   navAdd: { width: 48, height: 48, borderRadius: 24, background: "#E67E22", border: "none", color: "#fff", fontSize: 26, cursor: "pointer", marginTop: -18, boxShadow: "0 4px 16px rgba(230,126,34,0.4)", display: "flex", alignItems: "center", justifyContent: "center" },
   toastBar: { position: "fixed", left: "50%", transform: "translateX(-50%)", top: 20, width: "calc(100% - 40px)", maxWidth: 440, background: "#27AE60", color: "#fff", borderRadius: 10, padding: "12px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", zIndex: 200, boxShadow: "0 4px 20px rgba(0,0,0,0.4)", fontSize: 14, fontWeight: 600 },
   toastBarError: { background: "#E74C3C" },
