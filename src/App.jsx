@@ -155,6 +155,11 @@ export default function App() {
       createdAt: dateKey(new Date()),
     };
     saveActiveJobs([newJob, ...activeJobs]);
+    // Add client to profiles if not already there
+    const clientName = activeJobForm.client.trim();
+    if (clientName && !clientProfiles[clientName]) {
+      saveClientProfiles({ ...clientProfiles, [clientName]: { company:"", address:"", email:"", phone:"" } });
+    }
     setSaveFlash(true); setTimeout(() => setSaveFlash(false), 1200);
     setView("jobs"); setJobsSubView("active");
   };
@@ -477,9 +482,11 @@ export default function App() {
   const [editingJob, setEditingJob] = useState(null);
   const [jobEditForm, setJobEditForm] = useState(defaultJobForm());
   const updateJobEditForm = (f, v) => setJobEditForm(p => ({ ...p, [f]: v }));
+  const [jobEditExpForm, setJobEditExpForm] = useState({ date: dateKey(new Date()), amount:"", category:"Materials", note:"", supplier:"" });
   const openJobEdit = (j) => {
     setEditingJob(j);
-    setJobEditForm({ client: j.client || "", job: j.job || "", dateFrom: j.dateFrom || dateKey(new Date()), dateTo: j.dateTo || dateKey(new Date()), includeSaturday: false, includeSunday: false, totalEarnings: String(j.totalEarnings || ""), totalHours: String(j.totalHours || ""), hoursMode: "total", materials: String(j.materials || ""), labour: String(j.labour || ""), fuel: String(j.fuel || ""), fuelMode: "total", notes: j.notes || "" });
+    setJobEditForm({ client: j.client || "", job: j.job || "", dateFrom: j.dateFrom || dateKey(new Date()), dateTo: j.dateTo || dateKey(new Date()), includeSaturday: false, includeSunday: false, totalEarnings: String(j.totalEarnings || ""), totalHours: String(j.totalHours || ""), hoursMode: "total", materials: String(j.materials || ""), labour: String(j.labour || ""), fuel: String(j.fuel || ""), fuelMode: "total", notes: j.notes || "", expenses: j.expenses || [], extraDays: j.extraDays || [] });
+    setJobEditExpForm({ date: dateKey(new Date()), amount:"", category:"Materials", note:"", supplier:"" });
     setView("editJob");
   };
   const saveJobEdit = () => {
@@ -498,14 +505,21 @@ export default function App() {
       }
     }
     const totalE = Number(totalEarnings) || 0;
-    const totalM = Number(materials) || 0;
-    const totalL = Number(labour) || 0;
     const rawFuel = Number(fuel) || 0;
-    const effectiveDays = numDays || editingJob.days;
+    const effectiveDays = (numDays || editingJob.days) + (jobEditForm.extraDays || []).length;
     const totalF = jobEditForm.fuelMode === "perday" ? rawFuel * effectiveDays : rawFuel;
     const rawHours = Number(totalHours) || 0;
     const totalHrs = jobEditForm.hoursMode === "perday" ? rawHours * effectiveDays : rawHours;
-    const updated = { ...editingJob, client: client.trim(), job: job.trim(), dateFrom, dateTo, days: effectiveDays, totalEarnings: totalE, totalHours: totalHrs, materials: totalM, labour: totalL, fuel: totalF, notes: notes.trim(), profit: totalE - totalM - totalL - totalF };
+    // Base totals + expenses added via expense adder
+    const expMat = (jobEditForm.expenses || []).filter(e => e.category === "Materials").reduce((t,e) => t+(Number(e.amount)||0), 0);
+    const expLab = (jobEditForm.expenses || []).filter(e => e.category === "Labour").reduce((t,e) => t+(Number(e.amount)||0), 0);
+    const expFuel = (jobEditForm.expenses || []).filter(e => e.category === "Fuel").reduce((t,e) => t+(Number(e.amount)||0), 0);
+    const expOther = (jobEditForm.expenses || []).filter(e => e.category !== "Materials" && e.category !== "Labour" && e.category !== "Fuel").reduce((t,e) => t+(Number(e.amount)||0), 0);
+    const totalM = (Number(materials) || 0) + expMat;
+    const totalL = (Number(labour) || 0) + expLab;
+    const totalFinal = totalF + expFuel;
+    const totalAllCosts = totalM + totalL + totalFinal + expOther;
+    const updated = { ...editingJob, client: client.trim(), job: job.trim(), dateFrom, dateTo, days: effectiveDays, totalEarnings: totalE, totalHours: totalHrs, materials: totalM, labour: totalL, fuel: totalFinal, notes: notes.trim(), profit: totalE - totalAllCosts, expenses: jobEditForm.expenses || [], extraDays: jobEditForm.extraDays || [] };
     saveJobs(jobs.map(j => j === editingJob ? updated : j));
     // Update daily hours on linked entries
     if (editingJob.id && totalHrs > 0 && effectiveDays > 0) {
@@ -863,18 +877,20 @@ export default function App() {
             <div style={S.half}><label style={S.label}>Materials £</label><input style={S.input} type="number" inputMode="decimal" placeholder="0" value={jf.materials} onChange={e => updateJobForm("materials", e.target.value)} /></div>
             <div style={S.half}><label style={S.label}>Labour £</label><input style={S.input} type="number" inputMode="decimal" placeholder="0" value={jf.labour} onChange={e => updateJobForm("labour", e.target.value)} /></div>
           </div>
-          <div style={S.fieldGroup}>
-            <label style={S.label}>{jf.fuelMode === "perday" ? "Fuel / Travel (per day)" : "Fuel / Travel (total)"}</label>
-            <input style={S.input} type="number" inputMode="decimal" placeholder="0" value={jf.fuel} onChange={e => updateJobForm("fuel", e.target.value)} />
-            <div style={{...S.toggleRow, marginTop: 6}}>
-              <button type="button" onClick={() => updateJobForm("fuelMode", "total")} style={jf.fuelMode !== "perday" ? S.toggleBtnActive : S.toggleBtn}>Total</button>
-              <button type="button" onClick={() => updateJobForm("fuelMode", "perday")} style={jf.fuelMode === "perday" ? S.toggleBtnActive : S.toggleBtn}>Per day</button>
+          <div style={S.row}>
+            <div style={S.half}>
+              <label style={S.label}>{jf.fuelMode === "perday" ? "Fuel / Travel (per day)" : "Fuel / Travel (total)"}</label>
+              <input style={S.input} type="number" inputMode="decimal" placeholder="0" value={jf.fuel} onChange={e => updateJobForm("fuel", e.target.value)} />
+              <div style={{...S.toggleRow, marginTop: 6}}>
+                <button type="button" onClick={() => updateJobForm("fuelMode", "total")} style={jf.fuelMode !== "perday" ? S.toggleBtnActive : S.toggleBtn}>Total</button>
+                <button type="button" onClick={() => updateJobForm("fuelMode", "perday")} style={jf.fuelMode === "perday" ? S.toggleBtnActive : S.toggleBtn}>Per day</button>
+              </div>
+              {jf.fuelMode === "perday" && jDays > 0 && Number(jf.fuel) > 0 && (
+                <div style={{fontSize: 11, color: "#888", marginTop: 4}}>= {fmt((Number(jf.fuel)||0) * jDays)} total</div>
+              )}
             </div>
-            {jf.fuelMode === "perday" && jDays > 0 && Number(jf.fuel) > 0 && (
-              <div style={{fontSize: 11, color: "#888", marginTop: 4}}>Total fuel: {fmt((Number(jf.fuel)||0) * jDays)} across {jDays} days</div>
-            )}
+            <div style={S.half}><label style={S.label}>Notes</label><input style={S.input} placeholder="e.g. Extra day needed" value={jf.notes} onChange={e => updateJobForm("notes", e.target.value)} /></div>
           </div>
-          <div style={S.fieldGroup}><label style={S.label}>Notes</label><input style={S.input} placeholder="e.g. Extra day needed for plumbing" value={jf.notes} onChange={e => updateJobForm("notes", e.target.value)} /></div>
 
           {/* Preview */}
           {(() => {
@@ -959,18 +975,20 @@ export default function App() {
             <div style={S.half}><label style={S.label}>Materials</label><input style={S.input} type="number" inputMode="decimal" placeholder="0" value={jf.materials} onChange={e => updateJobEditForm("materials", e.target.value)} /></div>
             <div style={S.half}><label style={S.label}>Labour</label><input style={S.input} type="number" inputMode="decimal" placeholder="0" value={jf.labour} onChange={e => updateJobEditForm("labour", e.target.value)} /></div>
           </div>
-          <div style={S.fieldGroup}>
-            <label style={S.label}>{jf.fuelMode === "perday" ? "Fuel / Travel (per day)" : "Fuel / Travel (total)"}</label>
-            <input style={S.input} type="number" inputMode="decimal" placeholder="0" value={jf.fuel} onChange={e => updateJobEditForm("fuel", e.target.value)} />
-            <div style={{...S.toggleRow, marginTop: 6}}>
-              <button type="button" onClick={() => updateJobEditForm("fuelMode", "total")} style={jf.fuelMode !== "perday" ? S.toggleBtnActive : S.toggleBtn}>Total</button>
-              <button type="button" onClick={() => updateJobEditForm("fuelMode", "perday")} style={jf.fuelMode === "perday" ? S.toggleBtnActive : S.toggleBtn}>Per day</button>
+          <div style={S.row}>
+            <div style={S.half}>
+              <label style={S.label}>{jf.fuelMode === "perday" ? "Fuel / Travel (per day)" : "Fuel / Travel (total)"}</label>
+              <input style={S.input} type="number" inputMode="decimal" placeholder="0" value={jf.fuel} onChange={e => updateJobEditForm("fuel", e.target.value)} />
+              <div style={{...S.toggleRow, marginTop: 6}}>
+                <button type="button" onClick={() => updateJobEditForm("fuelMode", "total")} style={jf.fuelMode !== "perday" ? S.toggleBtnActive : S.toggleBtn}>Total</button>
+                <button type="button" onClick={() => updateJobEditForm("fuelMode", "perday")} style={jf.fuelMode === "perday" ? S.toggleBtnActive : S.toggleBtn}>Per day</button>
+              </div>
+              {jf.fuelMode === "perday" && jDays > 0 && Number(jf.fuel) > 0 && (
+                <div style={{fontSize: 11, color: "#888", marginTop: 4}}>= {fmt((Number(jf.fuel)||0) * jDays)} total</div>
+              )}
             </div>
-            {jf.fuelMode === "perday" && jDays > 0 && Number(jf.fuel) > 0 && (
-              <div style={{fontSize: 11, color: "#888", marginTop: 4}}>Total fuel: {fmt((Number(jf.fuel)||0) * jDays)} across {jDays} days</div>
-            )}
+            <div style={S.half}><label style={S.label}>Notes</label><input style={S.input} placeholder="e.g. Extra day needed" value={jf.notes} onChange={e => updateJobEditForm("notes", e.target.value)} /></div>
           </div>
-          <div style={S.fieldGroup}><label style={S.label}>Notes</label><input style={S.input} placeholder="e.g. Extra day needed for plumbing" value={jf.notes} onChange={e => updateJobEditForm("notes", e.target.value)} /></div>
           {(() => {
             const effectiveFuel = jf.fuelMode === "perday" && jDays > 0 ? (Number(jf.fuel)||0) * jDays : (Number(jf.fuel)||0);
             const previewC = (Number(jf.materials)||0) + (Number(jf.labour)||0) + effectiveFuel;
@@ -983,6 +1001,62 @@ export default function App() {
               </div>
             ) : null;
           })()}
+          {/* Extra Days */}
+          <div style={S.divider} />
+          <div style={{ fontSize: 13, color: "#3498DB", fontWeight: 700, marginBottom: 8 }}>📅 Extra Days</div>
+          {(jobEditForm.extraDays||[]).length > 0 && (
+            <div style={{display:"flex", gap:6, flexWrap:"wrap", marginBottom:8}}>
+              {(jobEditForm.extraDays||[]).map(d => (
+                <div key={d} style={{background:"#22252C", borderRadius:8, padding:"6px 10px", fontSize:12, display:"flex", alignItems:"center", gap:6}}>
+                  <span>{new Date(d+"T12:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"})}</span>
+                  <button type="button" onClick={() => updateJobEditForm("extraDays", (jobEditForm.extraDays||[]).filter(x => x !== d))} style={{background:"none",border:"none",color:"#555",fontSize:14,cursor:"pointer",padding:0}}>✕</button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={S.row}>
+            <div style={{flex:1}}><input id="jedit-day-input" style={S.input} type="date" defaultValue={dateKey(new Date())} /></div>
+            <button type="button" onClick={() => { const inp = document.getElementById("jedit-day-input"); if (inp?.value && !(jobEditForm.extraDays||[]).includes(inp.value)) updateJobEditForm("extraDays", [...(jobEditForm.extraDays||[]), inp.value].sort()); }} style={{...S.editBookingBtn, padding:"10px 16px", alignSelf:"flex-end"}}>+ Add Day</button>
+          </div>
+
+          {/* Extra Expenses */}
+          <div style={S.divider} />
+          <div style={{ fontSize: 13, color: "#E67E22", fontWeight: 700, marginBottom: 8 }}>🧱 Add Expense</div>
+          <div style={{display:"flex", gap:6, flexWrap:"wrap", marginBottom:8}}>
+            {JOB_EXPENSE_CATS.map(cat => (
+              <button key={cat} type="button" onClick={() => setJobEditExpForm(p => ({...p, category: cat}))} style={jobEditExpForm.category === cat ? {...S.toggleBtnActive, flex:"0 0 auto", padding:"8px 12px", borderRadius:20, fontSize:12} : {...S.toggleBtn, flex:"0 0 auto", padding:"8px 12px", borderRadius:20, fontSize:12, border:"1px solid #333"}}>
+                {JOB_CAT_ICONS[cat]} {cat}
+              </button>
+            ))}
+          </div>
+          <div style={S.row}>
+            <div style={S.half}><label style={S.label}>Amount</label><input style={S.input} type="number" inputMode="decimal" placeholder="0" value={jobEditExpForm.amount} onChange={e => setJobEditExpForm(p => ({...p, amount: e.target.value}))} /></div>
+            <div style={S.half}><label style={S.label}>Date</label><input style={S.input} type="date" value={jobEditExpForm.date} onChange={e => setJobEditExpForm(p => ({...p, date: e.target.value}))} /></div>
+          </div>
+          <div style={S.row}>
+            <div style={S.half}><label style={S.label}>Supplier (optional)</label><input style={S.input} placeholder="e.g. Screwfix" value={jobEditExpForm.supplier} onChange={e => setJobEditExpForm(p => ({...p, supplier: e.target.value}))} /></div>
+            <div style={S.half}><label style={S.label}>Note (optional)</label><input style={S.input} placeholder="e.g. screws and fixings" value={jobEditExpForm.note} onChange={e => setJobEditExpForm(p => ({...p, note: e.target.value}))} /></div>
+          </div>
+          <button type="button" onClick={() => {
+            const amt = Number(jobEditExpForm.amount); if (amt <= 0) return;
+            const exp = { id:"je_"+Date.now(), date:jobEditExpForm.date, amount:amt, category:jobEditExpForm.category, note:jobEditExpForm.note.trim(), supplier:jobEditExpForm.supplier.trim() };
+            updateJobEditForm("expenses", [...(jobEditForm.expenses||[]), exp]);
+            setJobEditExpForm(p => ({...p, amount:"", note:"", supplier:""}));
+          }} style={{...S.saveBtn, background:"rgba(230,126,34,0.15)", color:"#E67E22", border:"2px solid #E67E22", marginTop:8}}>+ Add Expense</button>
+          {(jobEditForm.expenses||[]).length > 0 && (
+            <>
+              <div style={{fontSize:12, color:"#888", margin:"10px 0 4px", fontWeight:700}}>Added expenses:</div>
+              {[...(jobEditForm.expenses||[])].reverse().map(exp => (
+                <div key={exp.id} style={S.expRow}>
+                  <div style={S.expIcon}>{JOB_CAT_ICONS[exp.category]||"📦"}</div>
+                  <div style={S.expInfo}><div style={S.expName}>{exp.note||exp.category}{exp.supplier ? ` — ${exp.supplier}` : ""}</div><div style={S.expCat}>{exp.date} · {exp.category}</div></div>
+                  <div style={S.expAmount}>{fmt(exp.amount)}</div>
+                  <button type="button" onClick={() => updateJobEditForm("expenses", (jobEditForm.expenses||[]).filter(e => e.id !== exp.id))} style={S.expDel}>✕</button>
+                </div>
+              ))}
+            </>
+          )}
+
           <button onClick={saveJobEdit} style={{...S.saveBtn, ...(saveFlash ? S.saveBtnFlash : {})}}>{saveFlash ? "✓ Saved!" : "Save Changes"}</button>
           <button type="button" onClick={() => setConfirmAction({ label: "Delete this completed job?", action: () => { const prev = jobs; saveJobs(jobs.filter(j => j !== editingJob)); queueUndo("Job deleted", () => saveJobs(prev)); setEditingJob(null); setView("jobs"); } })} style={S.deleteBtn}>Delete Job</button>
         </div>
@@ -2231,7 +2305,7 @@ export default function App() {
           <div style={{...S.statPillVal, color:"#E74C3C"}}>{fmt(yearStats.mat+yearStats.lab+yearStats.fuel)}</div>
         </div>
         <div style={S.statPill}>
-          <div style={S.statPillLabel}>Days Out</div>
+          <div style={S.statPillLabel}>Days Worked</div>
           <div style={S.statPillVal}>{yearStats.days}</div>
         </div>
       </div>
