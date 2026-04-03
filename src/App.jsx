@@ -208,14 +208,30 @@ export default function App() {
   const completeActiveJob = (jobId, finalRevenue) => {
     const aj = activeJobs.find(j => j.id === jobId);
     if (!aj) return;
-    const totalExpenses = aj.expenses.reduce((t, e) => t + (Number(e.amount) || 0), 0);
     const rev = Number(finalRevenue) || 0;
+    const matTotal = aj.expenses.filter(e => e.category === "Materials").reduce((t, e) => t + (Number(e.amount) || 0), 0);
+    const labTotal = aj.expenses.filter(e => e.category === "Labour").reduce((t, e) => t + (Number(e.amount) || 0), 0);
+    const fuelTotal = aj.expenses.filter(e => e.category === "Fuel").reduce((t, e) => t + (Number(e.amount) || 0), 0);
+    const otherTotal = aj.expenses.filter(e => e.category !== "Materials" && e.category !== "Labour" && e.category !== "Fuel").reduce((t, e) => t + (Number(e.amount) || 0), 0);
+    const totalExpenses = matTotal + labTotal + fuelTotal + otherTotal;
+
+    const numDays = aj.daysWorked.length || 1;
+    const dailyEarnings = Math.round(rev / numDays * 100) / 100;
+    const dailyMat = Math.round(matTotal / numDays * 100) / 100;
+    const dailyLab = Math.round(labTotal / numDays * 100) / 100;
+    const dailyFuel = Math.round(fuelTotal / numDays * 100) / 100;
+
+    // Create diary entries for each day worked so dashboard/month/client stats pick them up
+    const ne = { ...entries };
+    aj.daysWorked.forEach(dk => {
+      ne[dk] = { client: aj.client, job: aj.job, description: "", hours: "", estimated: "", actual: String(dailyEarnings), materials: String(dailyMat), labour: String(dailyLab), miles: "", fuelCost: String(dailyFuel), jobId: aj.id };
+    });
+    saveEntries(ne);
+
     const jobSummary = {
-      id: aj.id, client: aj.client, job: aj.job, dateFrom: aj.startDate, dateTo: dateKey(new Date()),
+      id: aj.id, client: aj.client, job: aj.job, dateFrom: aj.startDate, dateTo: aj.daysWorked.length > 0 ? aj.daysWorked[aj.daysWorked.length - 1] : dateKey(new Date()),
       days: aj.daysWorked.length, totalEarnings: rev, totalHours: 0,
-      materials: aj.expenses.filter(e => e.category === "Materials").reduce((t, e) => t + (Number(e.amount) || 0), 0),
-      labour: aj.expenses.filter(e => e.category === "Labour").reduce((t, e) => t + (Number(e.amount) || 0), 0),
-      fuel: aj.expenses.filter(e => e.category === "Fuel").reduce((t, e) => t + (Number(e.amount) || 0), 0),
+      materials: matTotal, labour: labTotal, fuel: fuelTotal,
       notes: "", profit: rev - totalExpenses, completedAt: dateKey(new Date()),
     };
     saveJobs([jobSummary, ...jobs]);
@@ -614,7 +630,7 @@ export default function App() {
     const s = { est:0,act:0,mat:0,lab:0,hrs:0,days:0,miles:0,fuel:0 };
     monthStats.forEach(m => { Object.keys(s).forEach(k => s[k]+=m[k]); });
     s.jobProfit = s.act-s.mat-s.lab-s.fuel;
-    s.avgHourly = s.hrs>0 ? s.act/s.hrs : 0;
+    s.avgHourly = s.hrs>0 ? (s.act-s.mat-s.lab-s.fuel)/s.hrs : 0;
     const recurringMonthly = recurring.reduce((t,r) => t+(Number(r.amount)||0), 0);
     const spreadMonthly = expenses
       .filter((e) => e.spreadOverYear)
@@ -2157,7 +2173,7 @@ export default function App() {
               <div style={S.weekHeader}>
                 <span style={S.weekLabel}>Week {wk}</span>
                 <div style={S.weekTotals}>
-                  {weeks[wk].actual > 0 && <div style={S.weekEarned}>{fmt(weeks[wk].profit)} earned</div>}
+                  {weeks[wk].actual > 0 && <div style={S.weekEarned}>{fmt(weeks[wk].profit)} profit</div>}
                   {weeks[wk].estimated > 0 && <div style={S.weekEstimated}>{fmt(weeks[wk].estimated)} est</div>}
                   {weeks[wk].actual === 0 && weeks[wk].estimated === 0 && <div style={S.weekDash}>—</div>}
                   {wk===bestWeek&&weeks[wk].actual>0&&<span style={S.bestBadge}>Best</span>}
@@ -2208,7 +2224,7 @@ export default function App() {
         <div style={S.sumCard}><div style={S.sumLabel}>Job Costs</div><div style={{...S.sumMed,color:"#E74C3C"}}>{fmt(yearStats.mat+yearStats.lab+yearStats.fuel)}</div></div>
         <div style={S.sumCard}><div style={S.sumLabel}>Monthly Overheads</div><div style={{...S.sumMed,color:"#E74C3C"}}>{fmt(yearStats.monthlyOverheads)}<span style={{fontSize:11,color:"#888"}}>/mo</span></div></div>
         <div style={S.sumCard}><div style={S.sumLabel}>One-off Expenses</div><div style={{...S.sumMed,color:"#E74C3C"}}>{fmt(yearStats.oneOffs)}</div></div>
-        <div style={S.sumCard}><div style={S.sumLabel}>Avg £/Hr</div><div style={S.sumMed}>{fmt(Math.round(yearStats.avgHourly))}</div></div>
+        <div style={S.sumCard}><div style={S.sumLabel}>Profit £/Hr</div><div style={S.sumMed}>{fmt(Math.round(yearStats.avgHourly))}</div></div>
         <div style={S.sumCard}><div style={S.sumLabel}>Days Worked</div><div style={S.sumMed}>{yearStats.days}</div></div>
       </div>
       <div style={S.sectionTitle}>Monthly Profit (after overheads)</div>
