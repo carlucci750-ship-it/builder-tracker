@@ -3,15 +3,25 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const FULL_MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-const YEAR = new Date().getFullYear();
 const EXPENSE_CATEGORIES = ["Public Liability Insurance","Van Payment / Finance","Tools & Equipment","Phone / Internet","Accountant Fees","Other"];
 const CAT_ICONS = {"Public Liability Insurance":"🛡️","Van Payment / Finance":"🚐","Tools & Equipment":"🔧","Phone / Internet":"📱","Accountant Fees":"📋","Other":"📦"};
 const CURRENCIES = {
   GBP: { label: "British Pound (GBP)", symbol: "£", locale: "en-GB" },
   EUR: { label: "Euro (EUR)", symbol: "€", locale: "de-DE" },
   USD: { label: "US Dollar (USD)", symbol: "$", locale: "en-US" },
+  AUD: { label: "Australian Dollar (AUD)", symbol: "A$", locale: "en-AU" },
+  NZD: { label: "New Zealand Dollar (NZD)", symbol: "NZ$", locale: "en-NZ" },
+  CAD: { label: "Canadian Dollar (CAD)", symbol: "CA$", locale: "en-CA" },
 };
-const defaultSettings = () => ({ currency: "GBP", businessName: "", businessAddress: "", businessPhone: "", businessEmail: "", bankName: "", bankAccount: "", bankSortCode: "", vatNumber: "" });
+const COUNTRIES = {
+  GB: { label: "🇬🇧 United Kingdom", currency: "GBP", taxMonthStart: 3 },
+  US: { label: "🇺🇸 United States", currency: "USD", taxMonthStart: 0 },
+  AU: { label: "🇦🇺 Australia", currency: "AUD", taxMonthStart: 6 },
+  IE: { label: "🇮🇪 Ireland", currency: "EUR", taxMonthStart: 0 },
+  NZ: { label: "🇳🇿 New Zealand", currency: "NZD", taxMonthStart: 3 },
+  CA: { label: "🇨🇦 Canada", currency: "CAD", taxMonthStart: 0 },
+};
+const defaultSettings = () => ({ currency: "GBP", country: "GB", businessName: "", businessAddress: "", businessPhone: "", businessEmail: "", bankName: "", bankAccount: "", bankSortCode: "", vatNumber: "" });
 const JOB_EXPENSE_CATS = ["Materials","Fuel","Tools/Parts","Labour","Other"];
 const JOB_CAT_ICONS = {"Materials":"🧱","Fuel":"⛽","Tools/Parts":"🔧","Labour":"👷","Other":"📦"};
 
@@ -66,7 +76,7 @@ export default function App() {
   const [jobsSubView, setJobsSubView] = useState("active");
   const [viewingActiveJob, setViewingActiveJob] = useState(null);
   const [activeJobForm, setActiveJobForm] = useState({ client:"", job:"", startDate: dateKey(new Date()), expectedRevenue:"" });
-  const [jobExpForm, setJobExpForm] = useState({ date: dateKey(new Date()), amount:"", category:"Materials", note:"", supplier:"" });
+  const [jobExpForm, setJobExpForm] = useState({ date: dateKey(new Date()), amount:"", category:"Materials", note:"", supplier:"", item:"" });
   const [jobExpPickerOpen, setJobExpPickerOpen] = useState(false);
   const [jobExpPickerCategory, setJobExpPickerCategory] = useState(null);
   const [addDayToJob, setAddDayToJob] = useState(null);
@@ -90,6 +100,19 @@ export default function App() {
     if (Math.abs(diff) < 50) return;
     if (diff > 0) onLeft(); else onRight();
   }, []);
+
+  // Tax year — derived from country setting
+  const countryMeta = COUNTRIES[settings.country || "GB"] || COUNTRIES.GB;
+  const taxMonthStart = countryMeta.taxMonthStart;
+  const _today = new Date();
+  const _todayMonth = _today.getMonth();
+  const _todayYear = _today.getFullYear();
+  const taxYearStartYear = _todayMonth >= taxMonthStart ? _todayYear : _todayYear - 1;
+  const taxMonths = Array.from({length: 12}, (_, i) => {
+    const total = taxMonthStart + i;
+    return { month: total % 12, year: taxYearStartYear + Math.floor(total / 12) };
+  });
+  const taxYearLabel = taxMonthStart === 0 ? String(taxYearStartYear) : `${taxYearStartYear}-${String(taxYearStartYear + 1).slice(-2)}`;
 
   const lastEntry = useMemo(() => {
     const keys = Object.keys(entries).sort().reverse();
@@ -116,7 +139,11 @@ export default function App() {
   const saveClientProfiles = (cp) => { setClientProfiles(cp); save("builder-client-profiles", cp); };
 
   const updateForm = (f, v) => setForm(p => ({ ...p, [f]: v }));
-  const updateSetting = (f, v) => saveSettings({ ...settings, [f]: v });
+  const updateSetting = (f, v) => {
+    const next = { ...settings, [f]: v };
+    if (f === "country" && COUNTRIES[v]) next.currency = COUNTRIES[v].currency;
+    saveSettings(next);
+  };
   const queueUndo = (label, restore) => {
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
     setUndoItem({ label, restore });
@@ -172,6 +199,7 @@ export default function App() {
       date: jobExpForm.date,
       amount: amt,
       category: jobExpPickerCategory || jobExpForm.category,
+      item: jobExpForm.item.trim(),
       note: jobExpForm.note.trim(),
       supplier: jobExpForm.supplier.trim(),
     };
@@ -179,7 +207,7 @@ export default function App() {
     saveActiveJobs(updated);
     const updatedJob = updated.find(j => j.id === jobId);
     if (updatedJob) setViewingActiveJob(updatedJob);
-    setJobExpForm({ date: dateKey(new Date()), amount:"", category: jobExpForm.category, note:"", supplier:"" });
+    setJobExpForm({ date: dateKey(new Date()), amount:"", category: jobExpForm.category, note:"", supplier:"", item:"" });
     setSaveFlash(true); setTimeout(() => setSaveFlash(false), 1200);
     setJobExpPickerOpen(false); setJobExpPickerCategory(null);
   };
@@ -482,7 +510,7 @@ export default function App() {
   const [editingJob, setEditingJob] = useState(null);
   const [jobEditForm, setJobEditForm] = useState(defaultJobForm());
   const updateJobEditForm = (f, v) => setJobEditForm(p => ({ ...p, [f]: v }));
-  const [jobEditExpForm, setJobEditExpForm] = useState({ date: dateKey(new Date()), amount:"", category:"Materials", note:"", supplier:"" });
+  const [jobEditExpForm, setJobEditExpForm] = useState({ date: dateKey(new Date()), amount:"", category:"Materials", note:"", supplier:"", item:"" });
   const openJobEdit = (j) => {
     setEditingJob(j);
     setJobEditForm({ client: j.client || "", job: j.job || "", dateFrom: j.dateFrom || dateKey(new Date()), dateTo: j.dateTo || dateKey(new Date()), includeSaturday: false, includeSunday: false, totalEarnings: String(j.totalEarnings || ""), totalHours: String(j.totalHours || ""), hoursMode: "total", materials: String(j.materials || ""), labour: String(j.labour || ""), fuel: String(j.fuel || ""), fuelMode: "total", notes: j.notes || "", expenses: j.expenses || [], extraDays: j.extraDays || [] });
@@ -617,17 +645,17 @@ export default function App() {
   const removeSchedSlot = (idx) => { const nf = schedForm.filter((_, i) => i !== idx); setSchedForm(nf.length ? nf : [defaultScheduleItem()]); };
   const updateSchedForm = (idx, f, v) => setSchedForm(schedForm.map((s, i) => i === idx ? { ...s, [f]: v } : s));
 
-  // Stats
-  const monthStats = useMemo(() => MONTHS.map((_, mi) => {
+  // Stats — based on tax year months
+  const monthStats = useMemo(() => taxMonths.map(({month, year}) => {
     let est=0,act=0,mat=0,lab=0,hrs=0,days=0,miles=0,fuel=0;
-    const dim = new Date(YEAR, mi+1, 0).getDate();
+    const dim = new Date(year, month+1, 0).getDate();
     for (let d=1; d<=dim; d++) {
-      const key = `${YEAR}-${String(mi+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+      const key = `${year}-${String(month+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
       const e = entries[key];
       if (e) { est+=Number(e.estimated)||0; act+=Number(e.actual)||0; mat+=Number(e.materials)||0; lab+=Number(e.labour)||0; hrs+=Number(e.hours)||0; miles+=Number(e.miles)||0; fuel+=Number(e.fuelCost)||0; if ((Number(e.actual)||0)>0) days++; }
     }
     return { est, act, mat, lab, hrs, days, miles, fuel, profit: act-mat-lab-fuel };
-  }), [entries]);
+  }), [entries, taxMonths]);
 
   const clientStats = useMemo(() => {
     const cl = {};
@@ -664,22 +692,19 @@ export default function App() {
 
   const monthOverheads = useMemo(() => {
     const mo = recurring.reduce((t,r) => t+(Number(r.amount)||0), 0);
-    const spreadMonthly = expenses
-      .filter((e) => e.spreadOverYear)
-      .reduce((t, e) => t + (Number(e.amount) || 0) / 12, 0);
-    return MONTHS.map((_, mi) => {
-      const mk = `${YEAR}-${String(mi + 1).padStart(2, "0")}`;
-      const lumpInMonth = expenses
-        .filter((e) => !e.spreadOverYear && e.date?.startsWith(mk))
-        .reduce((t, e) => t + (Number(e.amount) || 0), 0);
+    const spreadMonthly = expenses.filter(e => e.spreadOverYear).reduce((t,e) => t+(Number(e.amount)||0)/12, 0);
+    return taxMonths.map(({month, year}) => {
+      const mk = `${year}-${String(month + 1).padStart(2, "0")}`;
+      const lumpInMonth = expenses.filter(e => !e.spreadOverYear && e.date?.startsWith(mk)).reduce((t,e) => t+(Number(e.amount)||0), 0);
       return mo + lumpInMonth + spreadMonthly;
     });
-  }, [recurring, expenses]);
+  }, [recurring, expenses, taxMonths]);
 
   const getWeeksInMonth = (mi) => {
-    const weeks = {}; const dim = new Date(YEAR, mi+1, 0).getDate();
+    const {month, year} = taxMonths[mi];
+    const weeks = {}; const dim = new Date(year, month+1, 0).getDate();
     for (let d=1; d<=dim; d++) {
-      const date = new Date(YEAR, mi, d); const wk = getWeekNumber(date);
+      const date = new Date(year, month, d); const wk = getWeekNumber(date);
       if (!weeks[wk]) weeks[wk] = { days:[], actual:0, estimated:0, materials:0, labour:0, fuel:0 };
       const key = dateKey(date);
       weeks[wk].days.push({ date, key, entry: entries[key]||null, dayOfWeek: date.getDay() });
@@ -722,11 +747,15 @@ export default function App() {
     return [...s].sort();
   }, [entries]);
 
-  const knownSuppliers = useMemo(() => {
-    const s = new Set();
-    activeJobs.forEach(aj => aj.expenses.forEach(e => { if (e.supplier?.trim()) s.add(e.supplier.trim()); }));
-    return [...s].sort();
-  }, [activeJobs]);
+  const recentSuppliers = useMemo(() => {
+    const all = [];
+    activeJobs.forEach(aj => aj.expenses.forEach(e => { if (e.supplier?.trim()) all.push({s: e.supplier.trim(), d: e.date||""}); }));
+    jobs.forEach(j => (j.expenses||[]).forEach(e => { if (e.supplier?.trim()) all.push({s: e.supplier.trim(), d: e.date||""}); }));
+    all.sort((a,b) => b.d.localeCompare(a.d));
+    const seen = new Set(); const result = [];
+    all.forEach(({s}) => { if (!seen.has(s)) { seen.add(s); result.push(s); } });
+    return result.slice(0, 6);
+  }, [activeJobs, jobs]);
 
   // Schedule helpers
   const getWeekDays = (monday) => Array.from({length: 7}, (_, i) => { const d = new Date(monday); d.setDate(d.getDate()+i); return d; });
@@ -1029,19 +1058,35 @@ export default function App() {
               </button>
             ))}
           </div>
+          <div style={S.fieldGroup}>
+            <label style={S.label}>Supplier</label>
+            {recentSuppliers.length > 0 && (
+              <div style={{display:"flex", gap:6, flexWrap:"wrap", marginBottom:6}}>
+                {recentSuppliers.map(s => (
+                  <button key={s} type="button" onClick={() => setJobEditExpForm(p => ({...p, supplier: s}))}
+                    style={{background: jobEditExpForm.supplier===s ? "#E67E22" : "#2A2D35", color: jobEditExpForm.supplier===s ? "#fff" : "#aaa", border:"none", borderRadius:16, padding:"5px 12px", fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit"}}>{s}</button>
+                ))}
+              </div>
+            )}
+            <input style={S.input} placeholder="e.g. Screwfix" value={jobEditExpForm.supplier} onChange={e => setJobEditExpForm(p => ({...p, supplier: e.target.value}))} />
+          </div>
+          <div style={S.fieldGroup}>
+            <label style={S.label}>Item</label>
+            <input style={S.input} placeholder="e.g. M8 bolts x50, 2L white primer" value={jobEditExpForm.item} onChange={e => setJobEditExpForm(p => ({...p, item: e.target.value}))} />
+          </div>
           <div style={S.row}>
             <div style={S.half}><label style={S.label}>Amount</label><input style={S.input} type="number" inputMode="decimal" placeholder="0" value={jobEditExpForm.amount} onChange={e => setJobEditExpForm(p => ({...p, amount: e.target.value}))} /></div>
             <div style={S.half}><label style={S.label}>Date</label><input style={S.input} type="date" value={jobEditExpForm.date} onChange={e => setJobEditExpForm(p => ({...p, date: e.target.value}))} /></div>
           </div>
-          <div style={S.row}>
-            <div style={S.half}><label style={S.label}>Supplier (optional)</label><input style={S.input} placeholder="e.g. Screwfix" value={jobEditExpForm.supplier} onChange={e => setJobEditExpForm(p => ({...p, supplier: e.target.value}))} /></div>
-            <div style={S.half}><label style={S.label}>Note (optional)</label><input style={S.input} placeholder="e.g. screws and fixings" value={jobEditExpForm.note} onChange={e => setJobEditExpForm(p => ({...p, note: e.target.value}))} /></div>
+          <div style={S.fieldGroup}>
+            <label style={S.label}>Note (optional)</label>
+            <input style={S.input} placeholder="e.g. for bathroom reno" value={jobEditExpForm.note} onChange={e => setJobEditExpForm(p => ({...p, note: e.target.value}))} />
           </div>
           <button type="button" onClick={() => {
             const amt = Number(jobEditExpForm.amount); if (amt <= 0) return;
-            const exp = { id:"je_"+Date.now(), date:jobEditExpForm.date, amount:amt, category:jobEditExpForm.category, note:jobEditExpForm.note.trim(), supplier:jobEditExpForm.supplier.trim() };
+            const exp = { id:"je_"+Date.now(), date:jobEditExpForm.date, amount:amt, category:jobEditExpForm.category, note:jobEditExpForm.note.trim(), supplier:jobEditExpForm.supplier.trim(), item:jobEditExpForm.item.trim() };
             updateJobEditForm("expenses", [...(jobEditForm.expenses||[]), exp]);
-            setJobEditExpForm(p => ({...p, amount:"", note:"", supplier:""}));
+            setJobEditExpForm(p => ({...p, amount:"", note:"", supplier:"", item:""}));
           }} style={{...S.saveBtn, background:"rgba(230,126,34,0.15)", color:"#E67E22", border:"2px solid #E67E22", marginTop:8}}>+ Add Expense</button>
           {(jobEditForm.expenses||[]).length > 0 && (
             <>
@@ -1049,7 +1094,7 @@ export default function App() {
               {[...(jobEditForm.expenses||[])].reverse().map(exp => (
                 <div key={exp.id} style={S.expRow}>
                   <div style={S.expIcon}>{JOB_CAT_ICONS[exp.category]||"📦"}</div>
-                  <div style={S.expInfo}><div style={S.expName}>{exp.note||exp.category}{exp.supplier ? ` — ${exp.supplier}` : ""}</div><div style={S.expCat}>{exp.date} · {exp.category}</div></div>
+                  <div style={S.expInfo}><div style={S.expName}>{exp.item||exp.note||exp.category}{exp.supplier ? ` — ${exp.supplier}` : ""}</div><div style={S.expCat}>{exp.date} · {exp.category}</div></div>
                   <div style={S.expAmount}>{fmt(exp.amount)}</div>
                   <button type="button" onClick={() => updateJobEditForm("expenses", (jobEditForm.expenses||[]).filter(e => e.id !== exp.id))} style={S.expDel}>✕</button>
                 </div>
@@ -1160,18 +1205,26 @@ export default function App() {
               </button>
             ))}
           </div>
+          <div style={S.fieldGroup}>
+            <label style={S.label}>Supplier</label>
+            {recentSuppliers.length > 0 && (
+              <div style={{display:"flex", gap:6, flexWrap:"wrap", marginBottom:6}}>
+                {recentSuppliers.map(s => (
+                  <button key={s} type="button" onClick={() => setJobExpForm({...jobExpForm, supplier: s})} style={{background: jobExpForm.supplier===s ? "#E67E22" : "#2A2D35", color: jobExpForm.supplier===s ? "#fff" : "#aaa", border:"none", borderRadius:16, padding:"5px 12px", fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit"}}>{s}</button>
+                ))}
+              </div>
+            )}
+            <input style={S.input} placeholder="e.g. Screwfix" value={jobExpForm.supplier} onChange={e => setJobExpForm({...jobExpForm, supplier: e.target.value})} />
+          </div>
+          <div style={S.fieldGroup}>
+            <label style={S.label}>Item</label>
+            <input style={S.input} placeholder="e.g. M8 bolts x50, 2L white primer" value={jobExpForm.item} onChange={e => setJobExpForm({...jobExpForm, item: e.target.value})} />
+          </div>
           <div style={S.row}>
             <div style={S.half}><label style={S.label}>Amount</label><input style={S.input} type="number" inputMode="decimal" placeholder="0" value={jobExpForm.amount} onChange={e => setJobExpForm({...jobExpForm, amount: e.target.value})} /></div>
             <div style={S.half}><label style={S.label}>Date</label><input style={S.input} type="date" value={jobExpForm.date} onChange={e => setJobExpForm({...jobExpForm, date: e.target.value})} /></div>
           </div>
-          <div style={S.row}>
-            <div style={S.half}>
-              <label style={S.label}>Supplier (optional)</label>
-              <input style={S.input} list="known-suppliers" placeholder="e.g. Screwfix" value={jobExpForm.supplier} onChange={e => setJobExpForm({...jobExpForm, supplier: e.target.value})} />
-              <datalist id="known-suppliers">{knownSuppliers.map(s => <option key={s} value={s} />)}</datalist>
-            </div>
-            <div style={S.half}><label style={S.label}>Note (optional)</label><input style={S.input} placeholder="e.g. screws and sealant" value={jobExpForm.note} onChange={e => setJobExpForm({...jobExpForm, note: e.target.value})} /></div>
-          </div>
+          <div style={S.fieldGroup}><label style={S.label}>Note (optional)</label><input style={S.input} placeholder="e.g. for kitchen job" value={jobExpForm.note} onChange={e => setJobExpForm({...jobExpForm, note: e.target.value})} /></div>
           <button onClick={() => addExpenseToJob(aj.id)} style={{...S.saveBtn, ...(saveFlash ? S.saveBtnFlash : {})}}>{saveFlash ? "✓ Added!" : `+ Add ${jobExpForm.category}`}</button>
 
           {/* Days worked */}
@@ -1197,8 +1250,8 @@ export default function App() {
             <div key={exp.id} style={S.expRow}>
               <div style={S.expIcon}>{JOB_CAT_ICONS[exp.category] || "📦"}</div>
               <div style={S.expInfo}>
-                <div style={S.expName}>{exp.note || exp.category}{exp.supplier ? ` — ${exp.supplier}` : ""}</div>
-                <div style={S.expCat}>{new Date(exp.date+"T12:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"})} · {exp.category}{exp.supplier ? ` · ${exp.supplier}` : ""}</div>
+                <div style={S.expName}>{exp.item || exp.note || exp.category}</div>
+                <div style={S.expCat}>{new Date(exp.date+"T12:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"})} · {exp.category}{exp.supplier ? ` · ${exp.supplier}` : ""}{exp.note && exp.item ? ` · ${exp.note}` : ""}</div>
               </div>
               <div style={S.expAmount}>{fmt(exp.amount)}</div>
               <button onClick={() => removeJobExpense(aj.id, exp.id)} style={S.expDel}>✕</button>
@@ -1767,7 +1820,7 @@ export default function App() {
             {/* Month view */}
             <div style={S.monthNav}>
               <button onClick={() => setSchedMonth(Math.max(0, schedMonth-1))} style={S.navArrow}>◀</button>
-              <div style={S.monthTitle}>{MONTHS[schedMonth]} {YEAR}</div>
+              <div style={S.monthTitle}>{MONTHS[schedMonth]} {_todayYear}</div>
               <button onClick={() => setSchedMonth(Math.min(11, schedMonth+1))} style={S.navArrow}>▶</button>
             </div>
 
@@ -2187,12 +2240,20 @@ export default function App() {
           <div style={S.settingsHelp}>These details appear on invoices you generate.</div>
 
           <div style={S.divider} />
-          <div style={{ fontSize: 13, color: "#E67E22", fontWeight: 700, marginBottom: 10 }}>Currency</div>
+          <div style={{ fontSize: 13, color: "#E67E22", fontWeight: 700, marginBottom: 10 }}>Country & Currency</div>
           <div style={S.fieldGroup}>
-            <select style={S.input} value={settings.currency} onChange={(e) => updateSetting("currency", e.target.value)}>
+            <label style={S.label}>Country</label>
+            <select style={S.input} value={settings.country||"GB"} onChange={e => updateSetting("country", e.target.value)}>
+              {Object.entries(COUNTRIES).map(([code, cfg]) => <option key={code} value={code}>{cfg.label}</option>)}
+            </select>
+            <div style={S.settingsHelp}>Sets your currency and tax year automatically.</div>
+          </div>
+          <div style={S.fieldGroup}>
+            <label style={S.label}>Currency (override)</label>
+            <select style={S.input} value={settings.currency} onChange={e => updateSetting("currency", e.target.value)}>
               {Object.entries(CURRENCIES).map(([code, cfg]) => <option key={code} value={code}>{cfg.label}</option>)}
             </select>
-            <div style={S.settingsHelp}>Preview: {fmt(1234)}</div>
+            <div style={S.settingsHelp}>Tax year: {taxYearLabel} · Preview: {fmt(1234)}</div>
           </div>
 
           <div style={S.divider} />
@@ -2226,7 +2287,7 @@ export default function App() {
         </div>
         <div style={S.monthNav}>
           <button onClick={() => setSelectedMonth(Math.max(0,mi-1))} style={S.navArrow}>◀</button>
-          <div style={S.monthTitle}>{MONTHS[mi]} {YEAR}</div>
+          <div style={S.monthTitle}>{FULL_MONTHS[taxMonths[mi].month]} {taxMonths[mi].year}</div>
           <button onClick={() => setSelectedMonth(Math.min(11,mi+1))} style={S.navArrow}>▶</button>
         </div>
         <div style={S.miniDash}>
@@ -2285,7 +2346,7 @@ export default function App() {
   // ═══ DASHBOARD ═══
   return (
     <div style={S.app}>
-      <div style={S.dashHeader}><div style={S.dashIcon}>🏗️</div><div style={S.dashTitle}>Builder Tracker</div><div style={S.dashYear}>{YEAR} · claude v3</div></div>
+      <div style={S.dashHeader}><div style={S.dashIcon}>🏗️</div><div style={S.dashTitle}>Builder Tracker</div><div style={S.dashYear}>{taxYearLabel} · claude v3</div></div>
 
       {/* Hero profit card */}
       <div style={{...S.heroCard, background: yearStats.trueProfit >= 0 ? "linear-gradient(135deg,rgba(39,174,96,0.15),rgba(39,174,96,0.05))" : "linear-gradient(135deg,rgba(231,76,60,0.15),rgba(231,76,60,0.05))", borderColor: yearStats.trueProfit >= 0 ? "rgba(39,174,96,0.3)" : "rgba(231,76,60,0.3)"}}>
@@ -2328,9 +2389,10 @@ export default function App() {
 
       <div style={S.sectionTitle}>Monthly Profit (after overheads)</div>
       <div style={S.barChart}>
-        {MONTHS.map((m, i) => {
-          const currentMonth = new Date().getMonth();
-          const isFuture = i > currentMonth;
+        {taxMonths.map(({month}, i) => {
+          const currentTaxMonthIdx = taxMonths.findIndex(tm => tm.month === _todayMonth && tm.year === _todayYear);
+          const isFuture = i > (currentTaxMonthIdx >= 0 ? currentTaxMonthIdx : 11);
+          const m = MONTHS[month];
           const monthTrueProfit = monthStats[i].profit - monthOverheads[i];
           const maxP = Math.max(...MONTHS.map((_,mi) => Math.abs(monthStats[mi].profit - monthOverheads[mi])), 1);
           const pct = maxP>0?(Math.abs(monthTrueProfit)/maxP)*100:0;
