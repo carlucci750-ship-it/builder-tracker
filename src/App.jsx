@@ -21,7 +21,7 @@ const COUNTRIES = {
   NZ: { label: "🇳🇿 New Zealand", currency: "NZD", taxMonthStart: 3 },
   CA: { label: "🇨🇦 Canada", currency: "CAD", taxMonthStart: 0 },
 };
-const defaultSettings = () => ({ currency: "GBP", country: "GB", businessName: "", businessAddress: "", businessPhone: "", businessEmail: "", bankName: "", bankAccount: "", bankSortCode: "", vatNumber: "" });
+const defaultSettings = () => ({ currency: "GBP", country: "GB", businessName: "", businessAddress: "", businessPhone: "", businessEmail: "", bankName: "", bankAccount: "", bankSortCode: "", vatNumber: "", invoiceNextNumber: 1 });
 const JOB_EXPENSE_CATS = ["Materials","Fuel","Tools/Parts","Labour","Other"];
 const JOB_CAT_ICONS = {"Materials":"🧱","Fuel":"⛽","Tools/Parts":"🔧","Labour":"👷","Other":"📦"};
 
@@ -835,6 +835,18 @@ export default function App() {
     setView("editBooking");
   };
 
+  // Invoice state
+  const [viewingJobForInvoice, setViewingJobForInvoice] = useState(null);
+  const [invoiceNum, setInvoiceNum] = useState(null);
+
+  const generateInvoice = (job) => {
+    const num = settings.invoiceNextNumber || 1;
+    setInvoiceNum(num);
+    setViewingJobForInvoice(job);
+    saveSettings({ ...settings, invoiceNextNumber: num + 1 });
+    setView("invoice");
+  };
+
   const navProps = {
     view, setView, openDay, onQuickAdd: openQuickAction,
     quickActionsOpen, setQuickActionsOpen, undoItem, onUndo: runUndo,
@@ -1103,6 +1115,7 @@ export default function App() {
           )}
 
           <button onClick={saveJobEdit} style={{...S.saveBtn, ...(saveFlash ? S.saveBtnFlash : {})}}>{saveFlash ? "✓ Saved!" : "Save Changes"}</button>
+          <button type="button" onClick={() => generateInvoice(editingJob)} style={S.invoiceBtn}>🧾 Generate Invoice</button>
           <button type="button" onClick={() => setConfirmAction({ label: "Delete this completed job?", action: () => { const prev = jobs; saveJobs(jobs.filter(j => j !== editingJob)); queueUndo("Job deleted", () => saveJobs(prev)); setEditingJob(null); setView("jobs"); } })} style={S.deleteBtn}>Delete Job</button>
         </div>
       </div>
@@ -2343,6 +2356,234 @@ export default function App() {
     );
   }
 
+  // ═══ INVOICE ═══
+  if (view === "invoice" && viewingJobForInvoice) {
+    const job = viewingJobForInvoice;
+    const client = clientProfiles[job.client] || {};
+    const numStr = String(invoiceNum || 1).padStart(3, "0");
+    const todayD = new Date();
+    const dueD = new Date(todayD.getTime() + 14 * 24 * 60 * 60 * 1000);
+    const fmtDate = (d) => d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+    const fmtJobDate = (s) => { if (!s) return ""; try { return new Date(s + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }); } catch { return s; } };
+
+    const totalEarnings = Number(job.totalEarnings) || 0;
+    const materials = Number(job.materials) || 0;
+    const labourCost = Number(job.labour) || 0;
+    const fuel = Number(job.fuel) || 0;
+    // Service charge = what's left after pass-through costs (materials, fuel, hired labour)
+    const serviceCharge = totalEarnings - materials - labourCost - fuel;
+
+    // Detailed line items from expense array (if available from active job tracking)
+    const detailedExpenses = Array.isArray(job.expenses) && job.expenses.length > 0 ? job.expenses : null;
+
+    // Build plain-text version for sharing
+    const buildShareText = () => {
+      const lines = [];
+      lines.push(`INVOICE #${numStr}`);
+      lines.push(`Date: ${fmtDate(todayD)}`);
+      lines.push(`Due: ${fmtDate(dueD)}`);
+      lines.push("");
+      if (settings.businessName) lines.push(`FROM: ${settings.businessName}`);
+      if (settings.businessAddress) lines.push(settings.businessAddress);
+      if (settings.businessPhone) lines.push(settings.businessPhone);
+      if (settings.businessEmail) lines.push(settings.businessEmail);
+      if (settings.vatNumber) lines.push(`VAT No: ${settings.vatNumber}`);
+      lines.push("");
+      lines.push(`BILL TO: ${job.client}`);
+      if (client.company) lines.push(client.company);
+      if (client.address) lines.push(client.address);
+      if (client.email) lines.push(client.email);
+      if (client.phone) lines.push(client.phone);
+      lines.push("");
+      lines.push(`JOB: ${job.job || "Services Rendered"}`);
+      lines.push(`Period: ${fmtJobDate(job.dateFrom)} – ${fmtJobDate(job.dateTo)}${job.days ? ` · ${job.days} days` : ""}`);
+      if (job.notes) lines.push(`Notes: ${job.notes}`);
+      lines.push("");
+      lines.push("─────────────────────────────────");
+      if (detailedExpenses) {
+        detailedExpenses.forEach(e => {
+          const label = [e.item, e.supplier, e.category].filter(Boolean).join(" · ");
+          lines.push(`${label.padEnd(32)} ${currencyMeta.symbol}${Number(e.amount).toFixed(2)}`);
+        });
+        if (serviceCharge > 0) lines.push(`${"Labour & Services".padEnd(32)} ${currencyMeta.symbol}${serviceCharge.toFixed(2)}`);
+      } else {
+        if (serviceCharge > 0) lines.push(`${"Labour & Services".padEnd(32)} ${currencyMeta.symbol}${serviceCharge.toFixed(2)}`);
+        if (materials > 0) lines.push(`${"Materials".padEnd(32)} ${currencyMeta.symbol}${materials.toFixed(2)}`);
+        if (labourCost > 0) lines.push(`${"Sub-contracted Labour".padEnd(32)} ${currencyMeta.symbol}${labourCost.toFixed(2)}`);
+        if (fuel > 0) lines.push(`${"Fuel / Travel".padEnd(32)} ${currencyMeta.symbol}${fuel.toFixed(2)}`);
+      }
+      lines.push("─────────────────────────────────");
+      lines.push(`${"TOTAL DUE".padEnd(32)} ${fmt(totalEarnings)}`);
+      lines.push("");
+      if (settings.bankName || settings.bankAccount) {
+        lines.push("PAYMENT DETAILS");
+        if (settings.bankName) lines.push(`Bank: ${settings.bankName}`);
+        if (settings.bankAccount) lines.push(`Account: ${settings.bankAccount}${settings.bankSortCode ? `  Sort Code: ${settings.bankSortCode}` : ""}`);
+      }
+      lines.push("");
+      lines.push("Thank you for your business.");
+      return lines.join("\n");
+    };
+
+    const handleShare = async () => {
+      const text = buildShareText();
+      if (navigator.share) {
+        try { await navigator.share({ title: `Invoice #${numStr} – ${job.client}`, text }); return; } catch {}
+      }
+      try { await navigator.clipboard.writeText(text); showToast("Invoice copied to clipboard"); } catch { showToast("Could not share invoice", "error"); }
+    };
+
+    return (
+      <div style={{ fontFamily: "'DM Sans','Segoe UI',system-ui,sans-serif", background: "#1A1D23", minHeight: "100vh", maxWidth: 480, margin: "0 auto" }}>
+        {/* Action bar – hidden when printing */}
+        <style>{`@media print { .inv-actions { display: none !important; } @page { margin: 12mm; } body { background: #fff !important; } }`}</style>
+        <div className="inv-actions" style={{ display: "flex", gap: 8, padding: "16px 20px 0" }}>
+          <button onClick={() => setView("editJob")} style={S.backBtn}>← Back</button>
+          <div style={{ flex: 1 }} />
+          <button onClick={handleShare} style={{ ...S.editBookingBtn, padding: "8px 14px", fontSize: 13 }}>Share</button>
+          <button onClick={() => window.print()} style={{ ...S.saveBtn, width: "auto", padding: "8px 16px", marginTop: 0, fontSize: 13 }}>Print / PDF</button>
+        </div>
+
+        {/* Invoice document */}
+        <div style={S.invoiceDoc}>
+          {/* Header */}
+          <div style={S.invoiceHeader}>
+            <div style={{ flex: 1 }}>
+              <div style={S.invoiceBizName}>{settings.businessName || "Your Business"}</div>
+              {settings.businessAddress && <div style={S.invoiceBizDetail}>{settings.businessAddress}</div>}
+              {settings.businessPhone && <div style={S.invoiceBizDetail}>{settings.businessPhone}</div>}
+              {settings.businessEmail && <div style={S.invoiceBizDetail}>{settings.businessEmail}</div>}
+              {settings.vatNumber && <div style={{ ...S.invoiceBizDetail, marginTop: 4 }}>VAT: {settings.vatNumber}</div>}
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div style={S.invoiceTitle}>INVOICE</div>
+              <div style={S.invoiceNum}>#{numStr}</div>
+              <div style={{ ...S.invoiceMeta, marginTop: 6 }}>Date: {fmtDate(todayD)}</div>
+              <div style={S.invoiceMeta}>Due: {fmtDate(dueD)}</div>
+            </div>
+          </div>
+
+          <div style={S.invoiceDivider} />
+
+          {/* Bill To */}
+          <div style={{ marginBottom: 20 }}>
+            <div style={S.invoiceSectionLabel}>BILL TO</div>
+            <div style={S.invoiceClientName}>{job.client}</div>
+            {client.company && <div style={S.invoiceClientDetail}>{client.company}</div>}
+            {client.address && <div style={S.invoiceClientDetail}>{client.address}</div>}
+            {client.email && <div style={S.invoiceClientDetail}>{client.email}</div>}
+            {client.phone && <div style={S.invoiceClientDetail}>{client.phone}</div>}
+            {!client.company && !client.address && !client.email && !client.phone && (
+              <div style={{ ...S.invoiceClientDetail, color: "#aaa", fontStyle: "italic" }}>Add client details in the Clients tab</div>
+            )}
+          </div>
+
+          {/* Job description */}
+          <div style={S.invoiceJobBox}>
+            <div style={S.invoiceJobTitle}>{job.job || "Services Rendered"}</div>
+            <div style={S.invoiceJobMeta}>
+              {job.dateFrom && job.dateTo ? `${fmtJobDate(job.dateFrom)} – ${fmtJobDate(job.dateTo)}` : ""}
+              {job.days ? ` · ${job.days} day${job.days !== 1 ? "s" : ""}` : ""}
+            </div>
+            {job.notes && <div style={{ ...S.invoiceJobMeta, marginTop: 4 }}>Note: {job.notes}</div>}
+          </div>
+
+          {/* Line items */}
+          <div style={S.invoiceTable}>
+            <div style={S.invoiceTableHead}>
+              <span>Description</span>
+              <span>Amount</span>
+            </div>
+            {detailedExpenses ? (
+              <>
+                {detailedExpenses.map((e, i) => {
+                  const label = e.item ? `${e.item}${e.supplier ? ` (${e.supplier})` : ""}` : (e.supplier || e.category);
+                  return (
+                    <div key={i} style={S.invoiceLineItem}>
+                      <div style={S.invoiceLineDesc}>
+                        <span>{label}</span>
+                        <span style={S.invoiceLineSub}>{e.category}{e.date ? ` · ${fmtJobDate(e.date)}` : ""}</span>
+                      </div>
+                      <span style={S.invoiceLineAmt}>{fmt(e.amount)}</span>
+                    </div>
+                  );
+                })}
+                {serviceCharge > 0 && (
+                  <div style={S.invoiceLineItem}>
+                    <div style={S.invoiceLineDesc}><span>Labour &amp; Services</span></div>
+                    <span style={S.invoiceLineAmt}>{fmt(serviceCharge)}</span>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                {serviceCharge > 0 && (
+                  <div style={S.invoiceLineItem}>
+                    <div style={S.invoiceLineDesc}>
+                      <span>Labour &amp; Services</span>
+                      {job.days > 0 && serviceCharge > 0 && <span style={S.invoiceLineSub}>{job.days} day{job.days !== 1 ? "s" : ""} · {fmt(Math.round(serviceCharge / job.days))}/day</span>}
+                    </div>
+                    <span style={S.invoiceLineAmt}>{fmt(serviceCharge)}</span>
+                  </div>
+                )}
+                {materials > 0 && (
+                  <div style={S.invoiceLineItem}>
+                    <div style={S.invoiceLineDesc}><span>Materials</span></div>
+                    <span style={S.invoiceLineAmt}>{fmt(materials)}</span>
+                  </div>
+                )}
+                {labourCost > 0 && (
+                  <div style={S.invoiceLineItem}>
+                    <div style={S.invoiceLineDesc}><span>Sub-contracted Labour</span></div>
+                    <span style={S.invoiceLineAmt}>{fmt(labourCost)}</span>
+                  </div>
+                )}
+                {fuel > 0 && (
+                  <div style={S.invoiceLineItem}>
+                    <div style={S.invoiceLineDesc}><span>Fuel &amp; Travel</span></div>
+                    <span style={S.invoiceLineAmt}>{fmt(fuel)}</span>
+                  </div>
+                )}
+                {serviceCharge <= 0 && materials === 0 && labourCost === 0 && fuel === 0 && (
+                  <div style={S.invoiceLineItem}>
+                    <div style={S.invoiceLineDesc}><span>Services Rendered</span></div>
+                    <span style={S.invoiceLineAmt}>{fmt(totalEarnings)}</span>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Total */}
+          <div style={S.invoiceTotalRow}>
+            <span style={S.invoiceTotalLabel}>TOTAL DUE</span>
+            <span style={S.invoiceTotalAmt}>{fmt(totalEarnings)}</span>
+          </div>
+
+          <div style={S.invoiceDivider} />
+
+          {/* Payment details */}
+          {(settings.bankName || settings.bankAccount) && (
+            <div style={{ marginBottom: 16 }}>
+              <div style={S.invoiceSectionLabel}>PAYMENT DETAILS</div>
+              {settings.bankName && <div style={S.invoicePayDetail}><span style={S.invoicePayLabel}>Bank</span>{settings.bankName}</div>}
+              {settings.bankAccount && <div style={S.invoicePayDetail}><span style={S.invoicePayLabel}>Account</span>{settings.bankAccount}</div>}
+              {settings.bankSortCode && <div style={S.invoicePayDetail}><span style={S.invoicePayLabel}>Sort Code</span>{settings.bankSortCode}</div>}
+            </div>
+          )}
+
+          {(!settings.bankName && !settings.bankAccount) && (
+            <div style={{ marginBottom: 16, fontSize: 12, color: "#aaa", fontStyle: "italic" }}>Add bank details in Settings to show payment information.</div>
+          )}
+
+          <div style={S.invoiceThankYou}>Thank you for your business.</div>
+        </div>
+
+        <div style={{ height: 32 }} />
+      </div>
+    );
+  }
+
   // ═══ DASHBOARD ═══
   return (
     <div style={S.app}>
@@ -2682,4 +2923,32 @@ const S = {
   confirmOk: { flex: 1, padding: "12px", borderRadius: 10, border: "none", background: "#E74C3C", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" },
   searchInput: { width: "100%", padding: "10px 12px", borderRadius: 8, border: "2px solid #2A2D35", background: "#22252C", color: "#F0F0F0", fontSize: 14, fontFamily: "inherit", boxSizing: "border-box", outline: "none" },
   repeatBtn: { width: "100%", padding: "12px 14px", borderRadius: 10, border: "2px solid #3498DB", background: "rgba(52,152,219,0.08)", color: "#3498DB", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 14, fontFamily: "inherit", textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  // Invoice
+  invoiceBtn: { width: "100%", padding: "13px", borderRadius: 10, border: "2px solid #27AE60", background: "rgba(39,174,96,0.08)", color: "#27AE60", fontSize: 14, fontWeight: 700, cursor: "pointer", marginTop: 8, fontFamily: "inherit" },
+  invoiceDoc: { margin: "16px 16px 0", background: "#fff", borderRadius: 12, padding: "24px 22px", color: "#1a1a1a", boxShadow: "0 4px 24px rgba(0,0,0,0.3)" },
+  invoiceHeader: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 },
+  invoiceBizName: { fontSize: 18, fontWeight: 800, color: "#1a1a1a", marginBottom: 4 },
+  invoiceBizDetail: { fontSize: 12, color: "#555", lineHeight: 1.5 },
+  invoiceTitle: { fontSize: 22, fontWeight: 900, color: "#1a1a1a", letterSpacing: 2, textTransform: "uppercase" },
+  invoiceNum: { fontSize: 15, fontWeight: 700, color: "#E67E22" },
+  invoiceMeta: { fontSize: 12, color: "#555" },
+  invoiceDivider: { height: 1, background: "#e5e5e5", margin: "14px 0" },
+  invoiceSectionLabel: { fontSize: 9, fontWeight: 800, color: "#999", textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 6 },
+  invoiceClientName: { fontSize: 16, fontWeight: 700, color: "#1a1a1a" },
+  invoiceClientDetail: { fontSize: 12, color: "#555", lineHeight: 1.6 },
+  invoiceJobBox: { background: "#f7f8fa", borderRadius: 8, padding: "10px 14px", marginBottom: 16, borderLeft: "3px solid #E67E22" },
+  invoiceJobTitle: { fontSize: 14, fontWeight: 700, color: "#1a1a1a" },
+  invoiceJobMeta: { fontSize: 11, color: "#777", marginTop: 2 },
+  invoiceTable: { marginBottom: 0 },
+  invoiceTableHead: { display: "flex", justifyContent: "space-between", fontSize: 9, fontWeight: 800, color: "#999", textTransform: "uppercase", letterSpacing: 1, padding: "6px 0", borderBottom: "1px solid #e5e5e5", marginBottom: 4 },
+  invoiceLineItem: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "8px 0", borderBottom: "1px solid #f0f0f0" },
+  invoiceLineDesc: { display: "flex", flexDirection: "column", flex: 1, marginRight: 12, fontSize: 13, color: "#1a1a1a", fontWeight: 500 },
+  invoiceLineSub: { fontSize: 11, color: "#999", fontWeight: 400, marginTop: 1 },
+  invoiceLineAmt: { fontSize: 13, fontWeight: 700, color: "#1a1a1a", flexShrink: 0 },
+  invoiceTotalRow: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0 0", borderTop: "2px solid #1a1a1a", marginTop: 4 },
+  invoiceTotalLabel: { fontSize: 13, fontWeight: 800, color: "#1a1a1a", textTransform: "uppercase", letterSpacing: 0.5 },
+  invoiceTotalAmt: { fontSize: 22, fontWeight: 900, color: "#1a1a1a" },
+  invoicePayDetail: { display: "flex", gap: 10, fontSize: 13, color: "#1a1a1a", padding: "3px 0" },
+  invoicePayLabel: { fontSize: 11, fontWeight: 700, color: "#999", width: 70, flexShrink: 0 },
+  invoiceThankYou: { fontSize: 13, color: "#777", fontStyle: "italic", textAlign: "center", marginTop: 4 },
 };
