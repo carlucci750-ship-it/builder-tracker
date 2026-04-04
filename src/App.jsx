@@ -1839,10 +1839,10 @@ export default function App() {
 
             {/* Month forecast */}
             {(() => {
-              const dim = new Date(YEAR, schedMonth+1, 0).getDate();
+              const dim = new Date(_todayYear, schedMonth+1, 0).getDate();
               let mForecast = 0;
               for (let d=1; d<=dim; d++) {
-                const dk = `${YEAR}-${String(schedMonth+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+                const dk = `${_todayYear}-${String(schedMonth+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
                 (schedule[dk]||[]).forEach(it => mForecast += Number(it.expectedEarnings)||0);
               }
               return (
@@ -1857,13 +1857,13 @@ export default function App() {
             <div style={{ padding: "0 20px" }}>
               <div style={S.calHeader}>{DAYS.map(d => <div key={d} style={S.calHeaderDay}>{d}</div>)}</div>
               {(() => {
-                const first = new Date(YEAR, schedMonth, 1);
-                const dim = new Date(YEAR, schedMonth+1, 0).getDate();
+                const first = new Date(_todayYear, schedMonth, 1);
+                const dim = new Date(_todayYear, schedMonth+1, 0).getDate();
                 let startDay = first.getDay() === 0 ? 6 : first.getDay() - 1;
                 const cells = [];
                 for (let i = 0; i < startDay; i++) cells.push(<div key={`e${i}`} style={S.calCell} />);
                 for (let d = 1; d <= dim; d++) {
-                  const dk = `${YEAR}-${String(schedMonth+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+                  const dk = `${_todayYear}-${String(schedMonth+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
                   const items = schedule[dk] || [];
                   const isToday = dk === todayStr;
                   cells.push(
@@ -2591,7 +2591,7 @@ export default function App() {
 
       {/* Hero profit card */}
       <div style={{...S.heroCard, background: yearStats.trueProfit >= 0 ? "linear-gradient(135deg,rgba(39,174,96,0.15),rgba(39,174,96,0.05))" : "linear-gradient(135deg,rgba(231,76,60,0.15),rgba(231,76,60,0.05))", borderColor: yearStats.trueProfit >= 0 ? "rgba(39,174,96,0.3)" : "rgba(231,76,60,0.3)"}}>
-        <div style={S.heroLabel}>True Profit {YEAR}</div>
+        <div style={S.heroLabel}>True Profit {taxYearLabel}</div>
         <div style={{...S.heroAmount, color: yearStats.trueProfit >= 0 ? "#27AE60" : "#E74C3C"}}>{fmt(yearStats.trueProfit)}</div>
         <div style={S.heroSub}>after all costs & overheads</div>
       </div>
