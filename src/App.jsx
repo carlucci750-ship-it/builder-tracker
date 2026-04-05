@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { storageGet, storageSet, migrateFromLocalStorage } from "./storage";
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const FULL_MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -33,9 +34,8 @@ const defaultEntry = () => ({ client:"", job:"", description:"", hours:"", estim
 const defaultScheduleItem = () => ({ client:"", job:"", expectedEarnings:"" });
 const getMonday = (d) => { const date = new Date(d); const day = date.getDay(); const diff = date.getDate() - day + (day === 0 ? -6 : 1); return new Date(date.getFullYear(), date.getMonth(), diff); };
 
-const withTimeout = (p, ms) => Promise.race([p, new Promise(r => setTimeout(() => r(null), ms))]);
-const load = async (key, fb) => { try { if (!window.storage) return fb; const r = await withTimeout(window.storage.get(key), 2000); return r ? JSON.parse(r.value) : fb; } catch { return fb; } };
-const save = async (key, val) => { try { if (window.storage) await window.storage.set(key, JSON.stringify(val)); } catch {} };
+const load = (key, fb) => storageGet(key, fb);
+const save = (key, val) => storageSet(key, val);
 
 export default function App() {
   const [entries, setEntries] = useState({});
@@ -124,7 +124,9 @@ export default function App() {
   }, [entries]);
 
   useEffect(() => {
-    Promise.all([load("builder-entries",{}), load("builder-expenses",[]), load("builder-recurring",[]), load("builder-schedule",{}), load("builder-jobs",[]), load("builder-settings", defaultSettings()), load("builder-active-jobs",[]), load("builder-client-profiles",{})]).then(([e,ex,rc,sc,jb,st,aj,cp]) => {
+    migrateFromLocalStorage().then(() =>
+      Promise.all([load("builder-entries",{}), load("builder-expenses",[]), load("builder-recurring",[]), load("builder-schedule",{}), load("builder-jobs",[]), load("builder-settings", defaultSettings()), load("builder-active-jobs",[]), load("builder-client-profiles",{})])
+    ).then(([e,ex,rc,sc,jb,st,aj,cp]) => {
       setEntries(e); setExpenses(ex); setRecurring(rc); setSchedule(sc); setJobs(jb); setSettings({ ...defaultSettings(), ...(st || {}) }); setActiveJobs(aj || []); setClientProfiles(cp || {}); setLoaded(true);
     });
   }, []);
