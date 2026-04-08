@@ -34,8 +34,8 @@ const defaultScheduleItem = () => ({ client:"", job:"", expectedEarnings:"" });
 const getMonday = (d) => { const date = new Date(d); const day = date.getDay(); const diff = date.getDate() - day + (day === 0 ? -6 : 1); return new Date(date.getFullYear(), date.getMonth(), diff); };
 
 const withTimeout = (p, ms) => Promise.race([p, new Promise(r => setTimeout(() => r(null), ms))]);
-const load = async (key, fb) => { try { if (!window.storage) return fb; const r = await withTimeout(window.storage.get(key), 2000); return r ? JSON.parse(r.value) : fb; } catch { return fb; } };
-const save = async (key, val) => { try { if (window.storage) await window.storage.set(key, JSON.stringify(val)); } catch {} };
+const load = async (key, fb) => { try { if (window.storage) { const r = await withTimeout(window.storage.get(key), 2000); if (r) return JSON.parse(r.value); } const ls = localStorage.getItem(key); return ls ? JSON.parse(ls) : fb; } catch { return fb; } };
+const save = async (key, val) => { try { localStorage.setItem(key, JSON.stringify(val)); if (window.storage) await window.storage.set(key, JSON.stringify(val)); } catch {} };
 
 export default function App() {
   const [entries, setEntries] = useState({});
@@ -1826,10 +1826,10 @@ export default function App() {
 
             {/* Month forecast */}
             {(() => {
-              const dim = new Date(YEAR, schedMonth+1, 0).getDate();
+              const dim = new Date(_todayYear, schedMonth+1, 0).getDate();
               let mForecast = 0;
               for (let d=1; d<=dim; d++) {
-                const dk = `${YEAR}-${String(schedMonth+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+                const dk = `${_todayYear}-${String(schedMonth+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
                 (schedule[dk]||[]).forEach(it => mForecast += Number(it.expectedEarnings)||0);
               }
               return (
@@ -1844,13 +1844,13 @@ export default function App() {
             <div style={{ padding: "0 20px" }}>
               <div style={S.calHeader}>{DAYS.map(d => <div key={d} style={S.calHeaderDay}>{d}</div>)}</div>
               {(() => {
-                const first = new Date(YEAR, schedMonth, 1);
-                const dim = new Date(YEAR, schedMonth+1, 0).getDate();
+                const first = new Date(_todayYear, schedMonth, 1);
+                const dim = new Date(_todayYear, schedMonth+1, 0).getDate();
                 let startDay = first.getDay() === 0 ? 6 : first.getDay() - 1;
                 const cells = [];
                 for (let i = 0; i < startDay; i++) cells.push(<div key={`e${i}`} style={S.calCell} />);
                 for (let d = 1; d <= dim; d++) {
-                  const dk = `${YEAR}-${String(schedMonth+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+                  const dk = `${_todayYear}-${String(schedMonth+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
                   const items = schedule[dk] || [];
                   const isToday = dk === todayStr;
                   cells.push(
@@ -2350,7 +2350,7 @@ export default function App() {
 
       {/* Hero profit card */}
       <div style={{...S.heroCard, background: yearStats.trueProfit >= 0 ? "linear-gradient(135deg,rgba(39,174,96,0.15),rgba(39,174,96,0.05))" : "linear-gradient(135deg,rgba(231,76,60,0.15),rgba(231,76,60,0.05))", borderColor: yearStats.trueProfit >= 0 ? "rgba(39,174,96,0.3)" : "rgba(231,76,60,0.3)"}}>
-        <div style={S.heroLabel}>True Profit {YEAR}</div>
+        <div style={S.heroLabel}>True Profit {_todayYear}</div>
         <div style={{...S.heroAmount, color: yearStats.trueProfit >= 0 ? "#27AE60" : "#E74C3C"}}>{fmt(yearStats.trueProfit)}</div>
         <div style={S.heroSub}>after all costs & overheads</div>
       </div>
