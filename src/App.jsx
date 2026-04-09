@@ -59,7 +59,6 @@ export default function App() {
   const [jobExpForm, setJobExpForm] = useState({ date: dateKey(new Date()), amount:"", category:"Materials", note:"" });
   const [jobExpPickerOpen, setJobExpPickerOpen] = useState(false);
   const [jobExpPickerCategory, setJobExpPickerCategory] = useState(null);
-  const [addDayToJob, setAddDayToJob] = useState(null);
   const [completeMode, setCompleteMode] = useState(false);
   const [finalRevInput, setFinalRevInput] = useState("");
   const showToast = (msg, type = "success") => {
@@ -416,15 +415,6 @@ export default function App() {
     queueUndo("Booking removed", () => saveSchedule(prev));
   };
 
-  // Update entire booking by bookingId
-  const updateBooking = (bid, newData) => {
-    const ns = { ...schedule };
-    Object.keys(ns).forEach(dk => {
-      ns[dk] = ns[dk].map(item => item.bookingId === bid ? { ...item, ...newData } : item);
-    });
-    saveSchedule(ns);
-  };
-
   // Editing a booking
   const [editingBooking, setEditingBooking] = useState(null);
   const [bookingEditForm, setBookingEditForm] = useState({ client:"", job:"", jobPrice:"", expectedEarnings:"" });
@@ -676,74 +666,6 @@ export default function App() {
       return t + items.reduce((s, it) => s + (Number(it.expectedEarnings)||0), 0);
     }, 0);
   }, [schedule, schedWeekStart]);
-
-  /** Range bookings from the calendar (same data as schedule) for the Jobs tab */
-  const bookedJobsFromCalendar = useMemo(() => {
-    const master = new Map();
-    Object.values(schedule).forEach((arr) => {
-      (arr || []).forEach((it) => {
-        if (it.bookingId && !master.has(it.bookingId)) master.set(it.bookingId, it);
-      });
-    });
-    const list = [];
-    master.forEach((item, bookingId) => {
-      let days = 0;
-      Object.values(schedule).forEach((arr) => {
-        if ((arr || []).some((x) => x.bookingId === bookingId)) days += 1;
-      });
-      const exp = Number(item.expectedEarnings) || 0;
-      const forecastTurnover = days * exp;
-      const jp = Number(item.jobPrice) || 0;
-      list.push({
-        bookingId,
-        client: item.client || "",
-        job: item.job || "",
-        dateFrom: item.dateFrom || "",
-        dateTo: item.dateTo || "",
-        days,
-        forecastTurnover,
-        jobPrice: jp,
-        forecastProfit: jp > 0 ? jp - forecastTurnover : null,
-      });
-    });
-    return list.sort((a, b) => (b.dateFrom || "").localeCompare(a.dateFrom || ""));
-  }, [schedule]);
-
-  const openBookingForEdit = (bookingId) => {
-    let foundDk = null;
-    for (const dk of Object.keys(schedule).sort()) {
-      if (schedule[dk]?.some((it) => it.bookingId === bookingId)) {
-        foundDk = dk;
-        break;
-      }
-    }
-    if (!foundDk) return;
-    const bk = schedule[foundDk].find((it) => it.bookingId === bookingId);
-    if (!bk) return;
-    let hasSat = false;
-    let hasSun = false;
-    Object.keys(schedule).forEach((dk) => {
-      if (!schedule[dk]?.some((it) => it.bookingId === bookingId)) return;
-      const dParts = dk.split("-").map(Number);
-      if (dParts.length < 3) return;
-      const dow = new Date(dParts[0], dParts[1] - 1, dParts[2]).getDay();
-      if (dow === 6) hasSat = true;
-      if (dow === 0) hasSun = true;
-    });
-    setEditingSchedDate(foundDk);
-    setEditingBooking(bk);
-    setBookingEditForm({
-      client: bk.client || "",
-      job: bk.job || "",
-      jobPrice: bk.jobPrice || "",
-      expectedEarnings: bk.expectedEarnings || "",
-      dateFrom: bk.dateFrom || "",
-      dateTo: bk.dateTo || "",
-      includeSaturday: hasSat,
-      includeSunday: hasSun,
-    });
-    setView("editBooking");
-  };
 
   const navProps = {
     view, setView, openDay, onQuickAdd: openQuickAction,
