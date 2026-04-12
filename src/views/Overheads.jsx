@@ -8,10 +8,6 @@ export default function Overheads({ recurring, expenses, fmt, deleteExpense, tog
   return (
     <div style={S.app}>
       <div style={S.dashHeader}><div style={S.dashIcon}>💰</div><div style={S.dashTitle}>Money</div></div>
-      <div style={{ ...S.toggleRow, margin: "0 20px 12px" }}>
-        <button onClick={() => setView("clients")} style={S.toggleBtn}>Clients</button>
-        <button onClick={() => setView("overheads")} style={S.toggleBtnActive}>Business Costs</button>
-      </div>
       <div style={S.overheadSummary}>
         <div style={S.ohCard}><div style={S.ohLabel}>Monthly Recurring</div><div style={S.ohVal}>{fmt(trm)}<span style={S.ohPer}>/mo</span></div></div>
         <div style={S.ohCard}><div style={S.ohLabel}>One-off This Year</div><div style={S.ohVal}>{fmt(too)}</div></div>

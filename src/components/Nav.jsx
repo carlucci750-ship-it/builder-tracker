@@ -48,10 +48,11 @@ export default function Nav({ view, setView, openDay, onQuickAdd, quickActionsOp
       )}
       <div style={S.bottomNav}>
         <button onClick={() => setView("dashboard")} style={{...S.navBtn,...(view==="dashboard"?S.navActive:{})}}><span style={S.navIcon}>📊</span><span style={S.navTxt}>Home</span></button>
+        <button onClick={() => setView("overheads")} style={{...S.navBtn,...(view==="overheads"?S.navActive:{})}}><span style={S.navIcon}>💰</span><span style={S.navTxt}>Money</span></button>
         <button onClick={() => setView("schedule")} style={{...S.navBtn,...(view==="schedule"||view==="month"?S.navActive:{})}}><span style={S.navIcon}>📆</span><span style={S.navTxt}>Calendar</span></button>
         <button onClick={() => setQuickActionsOpen(!quickActionsOpen)} style={S.navAdd}><span style={{fontSize:28,lineHeight:1}}>{quickActionsOpen ? "×" : "+"}</span></button>
-        <button onClick={() => setView("jobs")} style={{...S.navBtn,...(view==="jobs"?S.navActive:{})}}><span style={S.navIcon}>🔨</span><span style={S.navTxt}>Jobs</span></button>
-        <button onClick={() => setView("clients")} style={{...S.navBtn,...(view==="clients"||view==="overheads"||view==="editClientProfile"||view==="addClient"?S.navActive:{})}}><span style={S.navIcon}>💰</span><span style={S.navTxt}>Money</span></button>
+        <button onClick={() => setView("clients")} style={{...S.navBtn,...(view==="clients"||view==="editClientProfile"||view==="addClient"?S.navActive:{})}}><span style={S.navIcon}>👥</span><span style={S.navTxt}>Clients</span></button>
+        <button onClick={() => setView("jobs")} style={{...S.navBtn,...(view==="jobs"||view==="activeJobDetail"||view==="createActiveJob"?S.navActive:{})}}><span style={S.navIcon}>🔨</span><span style={S.navTxt}>Jobs</span></button>
         <button onClick={() => setView("settings")} style={{...S.navBtn,...(view==="settings"?S.navActive:{})}}><span style={S.navIcon}>⚙️</span><span style={S.navTxt}>Settings</span></button>
       </div>
     </>

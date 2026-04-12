@@ -5,11 +5,7 @@ export default function Clients({ clientStats, clientSearch, setClientSearch, cl
   const maxE = Math.max(...filteredClients.map(c => c.earned), 1);
   return (
     <div style={S.app}>
-      <div style={S.dashHeader}><div style={S.dashIcon}>💰</div><div style={S.dashTitle}>Money</div></div>
-      <div style={{ ...S.toggleRow, margin: "0 20px 12px" }}>
-        <button onClick={() => setView("clients")} style={S.toggleBtnActive}>Clients</button>
-        <button onClick={() => setView("overheads")} style={S.toggleBtn}>Business Costs</button>
-      </div>
+      <div style={S.dashHeader}><div style={S.dashIcon}>👥</div><div style={S.dashTitle}>Clients</div></div>
       {clientStats.length > 0 && (
         <div style={{ padding: "0 20px 8px" }}>
           <input style={S.searchInput} placeholder="Search clients..." value={clientSearch} onChange={e => setClientSearch(e.target.value)} />
