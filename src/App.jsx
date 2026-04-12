@@ -70,10 +70,6 @@ export default function App() {
   const [finalRevInput, setFinalRevInput] = useState("");
   const [quoteEditMode, setQuoteEditMode] = useState(false);
   const [quoteEditVal, setQuoteEditVal] = useState("");
-  const [clientProfiles, setClientProfiles] = useState({});
-  const [editingClientProfile, setEditingClientProfile] = useState(null);
-  const [clientProfileForm, setClientProfileForm] = useState({ company:"", address:"", email:"", phone:"" });
-  const [newClientName, setNewClientName] = useState("");
   const [viewingJobForInvoice, setViewingJobForInvoice] = useState(null);
   const [invoiceNum, setInvoiceNum] = useState(null);
   const showToast = (msg, type = "success") => {
@@ -393,7 +389,6 @@ export default function App() {
       const nextActiveJobs = Array.isArray(data.activeJobs) ? data.activeJobs : [];
       const nextClientProfiles = data.clientProfiles && typeof data.clientProfiles === "object" ? data.clientProfiles : {};
       const nextSettings = { ...defaultSettings(), ...(data.settings || {}) };
-      const nextClientProfiles = data.clientProfiles && typeof data.clientProfiles === "object" ? data.clientProfiles : {};
       saveEntries(nextEntries);
       saveExpenses(nextExpenses);
       saveRecurring(nextRecurring);
@@ -402,7 +397,6 @@ export default function App() {
       saveActiveJobs(nextActiveJobs);
       saveClientProfiles(nextClientProfiles);
       saveSettings(nextSettings);
-      saveClientProfiles(nextClientProfiles);
       setView("dashboard");
       setSaveFlash(true); setTimeout(() => setSaveFlash(false), 1200);
       showToast("Backup imported.");
@@ -423,7 +417,6 @@ export default function App() {
     saveActiveJobs([]);
     saveClientProfiles({});
     saveSettings(defaultSettings());
-    saveClientProfiles({});
     setForm(defaultEntry());
     setExpForm({ category: EXPENSE_CATEGORIES[0], description:"", amount:"", date: dateKey(new Date()), isRecurring: false, recurringMonthly:"", spreadOverYear: false });
     setSchedForm([defaultScheduleItem()]);
@@ -440,7 +433,6 @@ export default function App() {
       saveActiveJobs(snapshot.activeJobs);
       saveClientProfiles(snapshot.clientProfiles || {});
       saveSettings(snapshot.settings);
-      saveClientProfiles(snapshot.clientProfiles || {});
     });
   };
 
