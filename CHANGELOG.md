@@ -10,6 +10,36 @@ to read than `git log` and survives across Claude sessions and tools.
 
 ---
 
+## 2026-04-12 — Restore lost features: invoicing, multi-country, client profiles, quick actions
+
+**What:** Ported back three groups of features that were lost during the
+refactor: (1) **Invoicing** — full invoice generation from completed jobs
+with auto-incrementing numbers, professional layout, share/print/PDF,
+business and bank details pulled from Settings. New `Invoice.jsx` view.
+(2) **Multi-country support** — 6 countries (GB, US, AU, IE, NZ, CA)
+with automatic currency and tax year mapping, 3 extra currencies (AUD,
+NZD, CAD), country selector in Settings. (3) **Client profiles** — add
+and edit client contact details (company, address, email, phone), shown
+on client cards and pulled into invoices. New `AddClient.jsx` and
+`EditClientProfile.jsx` views. (4) **Quick actions menu** — restored
+"View all jobs" and "Add client" shortcuts, plus the Daily/Jobs/Other
+section headers. Also restored the full Settings page with business
+profile, bank/payment details, and VAT number fields.
+
+**Why:** The April 7–8 refactor split the monolith into view files but
+these features weren't carried across. The code existed in pre-refactor
+commits (`d995b97` for country/clients, `230b294` for invoicing) and was
+manually ported into the new multi-file structure.
+
+**Risk:** Low. Build passes cleanly (40 modules, 332 kB). All changes
+follow the established pattern — new view files receive everything as
+props, App.jsx handles state and routing. The invoice view is
+self-contained and only reachable from EditJob. Client profiles are
+stored in a new `builder-client-profiles` localStorage key and wired
+into export/import/reset.
+
+---
+
 ## 2026-04-12 — Port supplier field and quote rename into refactored structure
 
 **What:** Two features that were added to the old monolith App.jsx before

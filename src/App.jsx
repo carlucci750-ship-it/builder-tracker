@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import S from "./styles.js";
-import { MONTHS, YEAR, EXPENSE_CATEGORIES, CURRENCIES, defaultSettings } from "./constants.js";
+import { MONTHS, YEAR, EXPENSE_CATEGORIES, CURRENCIES, COUNTRIES, defaultSettings } from "./constants.js";
 import { getWeekNumber, fmtBase, dateKey, defaultEntry, defaultScheduleItem, getMonday, load, save } from "./utils.js";
 import Nav from "./components/Nav.jsx";
 import Settings from "./views/Settings.jsx";
@@ -20,6 +20,9 @@ import EditJob from "./views/EditJob.jsx";
 import LogJob from "./views/LogJob.jsx";
 import Dashboard from "./views/Dashboard.jsx";
 import JobExpPicker from "./views/JobExpPicker.jsx";
+import Invoice from "./views/Invoice.jsx";
+import AddClient from "./views/AddClient.jsx";
+import EditClientProfile from "./views/EditClientProfile.jsx";
 
 export default function App() {
   const [entries, setEntries] = useState({});
@@ -63,6 +66,12 @@ export default function App() {
   const [finalRevInput, setFinalRevInput] = useState("");
   const [quoteEditMode, setQuoteEditMode] = useState(false);
   const [quoteEditVal, setQuoteEditVal] = useState("");
+  const [clientProfiles, setClientProfiles] = useState({});
+  const [editingClientProfile, setEditingClientProfile] = useState(null);
+  const [clientProfileForm, setClientProfileForm] = useState({ company:"", address:"", email:"", phone:"" });
+  const [newClientName, setNewClientName] = useState("");
+  const [viewingJobForInvoice, setViewingJobForInvoice] = useState(null);
+  const [invoiceNum, setInvoiceNum] = useState(null);
   const showToast = (msg, type = "success") => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast({ msg, type });
@@ -80,6 +89,15 @@ export default function App() {
     if (diff > 0) onLeft(); else onRight();
   }, []);
 
+  // Tax year — derived from country setting
+  const countryMeta = COUNTRIES[settings.country || "GB"] || COUNTRIES.GB;
+  const taxMonthStart = countryMeta.taxMonthStart;
+  const _today = new Date();
+  const _todayMonth = _today.getMonth();
+  const _todayYear = _today.getFullYear();
+  const taxYearStartYear = _todayMonth >= taxMonthStart ? _todayYear : _todayYear - 1;
+  const taxYearLabel = taxMonthStart === 0 ? String(taxYearStartYear) : `${taxYearStartYear}-${String(taxYearStartYear + 1).slice(-2)}`;
+
   const lastEntry = useMemo(() => {
     const keys = Object.keys(entries).sort().reverse();
     for (const k of keys) {
@@ -90,8 +108,8 @@ export default function App() {
   }, [entries]);
 
   useEffect(() => {
-    Promise.all([load("builder-entries",{}), load("builder-expenses",[]), load("builder-recurring",[]), load("builder-schedule",{}), load("builder-jobs",[]), load("builder-settings", defaultSettings()), load("builder-active-jobs",[])]).then(([e,ex,rc,sc,jb,st,aj]) => {
-      setEntries(e); setExpenses(ex); setRecurring(rc); setSchedule(sc); setJobs(jb); setSettings({ ...defaultSettings(), ...(st || {}) }); setActiveJobs(aj || []); setLoaded(true);
+    Promise.all([load("builder-entries",{}), load("builder-expenses",[]), load("builder-recurring",[]), load("builder-schedule",{}), load("builder-jobs",[]), load("builder-settings", defaultSettings()), load("builder-active-jobs",[]), load("builder-client-profiles",{})]).then(([e,ex,rc,sc,jb,st,aj,cp]) => {
+      setEntries(e); setExpenses(ex); setRecurring(rc); setSchedule(sc); setJobs(jb); setSettings({ ...defaultSettings(), ...(st || {}) }); setActiveJobs(aj || []); setClientProfiles(cp || {}); setLoaded(true);
     });
   }, []);
 
@@ -102,9 +120,14 @@ export default function App() {
   const saveJobs = (j) => { setJobs(j); save("builder-jobs", j); };
   const saveActiveJobs = (aj) => { setActiveJobs(aj); save("builder-active-jobs", aj); };
   const saveSettings = (s) => { setSettings(s); save("builder-settings", s); };
+  const saveClientProfiles = (cp) => { setClientProfiles(cp); save("builder-client-profiles", cp); };
 
   const updateForm = (f, v) => setForm(p => ({ ...p, [f]: v }));
-  const updateSetting = (f, v) => saveSettings({ ...settings, [f]: v });
+  const updateSetting = (f, v) => {
+    const next = { ...settings, [f]: v };
+    if (f === "country" && COUNTRIES[v]) next.currency = COUNTRIES[v].currency;
+    saveSettings(next);
+  };
   const queueUndo = (label, restore) => {
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
     setUndoItem({ label, restore });
@@ -125,6 +148,8 @@ export default function App() {
     if (action === "newActiveJob") { setActiveJobForm({ client:"", job:"", startDate: dateKey(new Date()), expectedRevenue:"" }); setView("createActiveJob"); }
     if (action === "jobExpense") { setJobExpPickerCategory(null); setJobExpPickerOpen(true); }
     if (action === "jobLabour") { setJobExpPickerCategory("Labour"); setJobExpPickerOpen(true); }
+    if (action === "viewJobs") { setView("jobs"); }
+    if (action === "addClient") { setNewClientName(""); setClientProfileForm({ company:"", address:"", email:"", phone:"" }); setView("addClient"); }
   };
 
   const createActiveJob = () => {
@@ -141,6 +166,10 @@ export default function App() {
       createdAt: dateKey(new Date()),
     };
     saveActiveJobs([newJob, ...activeJobs]);
+    const clientName = activeJobForm.client.trim();
+    if (clientName && !clientProfiles[clientName]) {
+      saveClientProfiles({ ...clientProfiles, [clientName]: { company:"", address:"", email:"", phone:"" } });
+    }
     setSaveFlash(true); setTimeout(() => setSaveFlash(false), 1200);
     setView("jobs"); setJobsSubView("active");
   };
@@ -219,6 +248,14 @@ export default function App() {
     queueUndo("Job deleted", () => saveActiveJobs(prev));
     setView("jobs"); setJobsSubView("active");
   };
+  const generateInvoice = (job) => {
+    const num = settings.invoiceNextNumber || 1;
+    setInvoiceNum(num);
+    setViewingJobForInvoice(job);
+    saveSettings({ ...settings, invoiceNextNumber: num + 1 });
+    setView("invoice");
+  };
+
   const updateExpForm = (f, v) => setExpForm(p => {
     const next = { ...p, [f]: v };
     if (f === "isRecurring" && v === true) next.spreadOverYear = false;
@@ -310,6 +347,7 @@ export default function App() {
       schedule,
       jobs,
       activeJobs,
+      clientProfiles,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -332,6 +370,7 @@ export default function App() {
       const nextSchedule = data.schedule && typeof data.schedule === "object" ? data.schedule : {};
       const nextJobs = Array.isArray(data.jobs) ? data.jobs : [];
       const nextActiveJobs = Array.isArray(data.activeJobs) ? data.activeJobs : [];
+      const nextClientProfiles = data.clientProfiles && typeof data.clientProfiles === "object" ? data.clientProfiles : {};
       const nextSettings = { ...defaultSettings(), ...(data.settings || {}) };
       saveEntries(nextEntries);
       saveExpenses(nextExpenses);
@@ -339,6 +378,7 @@ export default function App() {
       saveSchedule(nextSchedule);
       saveJobs(nextJobs);
       saveActiveJobs(nextActiveJobs);
+      saveClientProfiles(nextClientProfiles);
       saveSettings(nextSettings);
       setView("dashboard");
       setSaveFlash(true); setTimeout(() => setSaveFlash(false), 1200);
@@ -351,13 +391,14 @@ export default function App() {
   };
 
   const resetAllData = () => {
-    const snapshot = { entries, expenses, recurring, schedule, jobs, settings, activeJobs };
+    const snapshot = { entries, expenses, recurring, schedule, jobs, settings, activeJobs, clientProfiles };
     saveEntries({});
     saveExpenses([]);
     saveRecurring([]);
     saveSchedule({});
     saveJobs([]);
     saveActiveJobs([]);
+    saveClientProfiles({});
     saveSettings(defaultSettings());
     setForm(defaultEntry());
     setExpForm({ category: EXPENSE_CATEGORIES[0], description:"", amount:"", date: dateKey(new Date()), isRecurring: false, recurringMonthly:"", spreadOverYear: false });
@@ -373,6 +414,7 @@ export default function App() {
       saveSchedule(snapshot.schedule);
       saveJobs(snapshot.jobs);
       saveActiveJobs(snapshot.activeJobs);
+      saveClientProfiles(snapshot.clientProfiles || {});
       saveSettings(snapshot.settings);
     });
   };
@@ -578,8 +620,9 @@ export default function App() {
       if (!cl[n]) cl[n] = { earned:0, materials:0, labour:0, hours:0, fuel:0, jobs:0 };
       cl[n].earned+=Number(e.actual)||0; cl[n].materials+=Number(e.materials)||0; cl[n].labour+=Number(e.labour)||0; cl[n].hours+=Number(e.hours)||0; cl[n].fuel+=Number(e.fuelCost)||0; cl[n].jobs++;
     });
+    Object.keys(clientProfiles).forEach(n => { if (!cl[n]) cl[n] = { earned:0, materials:0, labour:0, hours:0, fuel:0, jobs:0 }; });
     return Object.entries(cl).map(([name, s]) => ({ name, ...s, profit: s.earned-s.materials-s.labour-s.fuel, perHour: s.hours>0 ? (s.earned-s.materials-s.labour-s.fuel)/s.hours : 0 })).sort((a,b) => b.profit-a.profit);
-  }, [entries]);
+  }, [entries, clientProfiles]);
 
   const yearStats = useMemo(() => {
     const s = { est:0,act:0,mat:0,lab:0,hrs:0,days:0,miles:0,fuel:0 };
@@ -645,8 +688,9 @@ export default function App() {
     const s = new Set();
     Object.values(entries).forEach(e => { if (e.client?.trim()) s.add(e.client.trim()); });
     Object.values(schedule).flat().forEach(s2 => { if (s2.client?.trim()) s.add(s2.client.trim()); });
+    Object.keys(clientProfiles).forEach(n => { if (n.trim()) s.add(n.trim()); });
     return [...s].sort();
-  }, [entries, schedule]);
+  }, [entries, schedule, clientProfiles]);
   const knownJobs = useMemo(() => {
     const s = new Set();
     Object.values(entries).forEach(e => { if (e.job?.trim()) s.add(e.job.trim()); });
@@ -691,7 +735,7 @@ export default function App() {
 
   // ═══ EDIT COMPLETED JOB ═══
   if (view === "editJob" && editingJob) {
-    return <EditJob editingJob={editingJob} setEditingJob={setEditingJob} jobEditForm={jobEditForm} updateJobEditForm={updateJobEditForm} knownClients={knownClients} knownJobs={knownJobs} saveJobEdit={saveJobEdit} saveJobs={saveJobs} jobs={jobs} queueUndo={queueUndo} setConfirmAction={setConfirmAction} saveFlash={saveFlash} setView={setView} fmt={fmt} />;
+    return <EditJob editingJob={editingJob} setEditingJob={setEditingJob} jobEditForm={jobEditForm} updateJobEditForm={updateJobEditForm} knownClients={knownClients} knownJobs={knownJobs} saveJobEdit={saveJobEdit} saveJobs={saveJobs} jobs={jobs} queueUndo={queueUndo} setConfirmAction={setConfirmAction} saveFlash={saveFlash} setView={setView} fmt={fmt} generateInvoice={generateInvoice} />;
   }
 
   // ═══ CREATE ACTIVE JOB ═══
@@ -749,14 +793,29 @@ export default function App() {
     return <Overheads recurring={recurring} expenses={expenses} fmt={fmt} deleteExpense={deleteExpense} toggleExpenseSpread={toggleExpenseSpread} setExpForm={setExpForm} setEditingExp={setEditingExp} setView={setView} navProps={navProps} Nav={Nav} />;
   }
 
+  // ═══ INVOICE ═══
+  if (view === "invoice" && viewingJobForInvoice) {
+    return <Invoice job={viewingJobForInvoice} invoiceNum={invoiceNum} settings={settings} clientProfiles={clientProfiles} currencyMeta={currencyMeta} fmt={fmt} showToast={showToast} setView={setView} />;
+  }
+
+  // ═══ ADD CLIENT ═══
+  if (view === "addClient") {
+    return <AddClient newClientName={newClientName} setNewClientName={setNewClientName} clientProfileForm={clientProfileForm} setClientProfileForm={setClientProfileForm} clientProfiles={clientProfiles} saveClientProfiles={saveClientProfiles} showToast={showToast} setView={setView} navProps={navProps} />;
+  }
+
+  // ═══ EDIT CLIENT PROFILE ═══
+  if (view === "editClientProfile") {
+    return <EditClientProfile editingClientProfile={editingClientProfile} clientProfileForm={clientProfileForm} setClientProfileForm={setClientProfileForm} clientProfiles={clientProfiles} saveClientProfiles={saveClientProfiles} showToast={showToast} saveFlash={saveFlash} setView={setView} navProps={navProps} />;
+  }
+
   // ═══ CLIENTS ═══
   if (view === "clients") {
-    return <Clients clientStats={clientStats} clientSearch={clientSearch} setClientSearch={setClientSearch} fmt={fmt} setView={setView} navProps={navProps} Nav={Nav} />;
+    return <Clients clientStats={clientStats} clientSearch={clientSearch} setClientSearch={setClientSearch} clientProfiles={clientProfiles} setEditingClientProfile={setEditingClientProfile} setClientProfileForm={setClientProfileForm} fmt={fmt} setView={setView} navProps={navProps} Nav={Nav} />;
   }
 
   // ═══ SETTINGS ═══
   if (view === "settings") {
-    return <Settings settings={settings} updateSetting={updateSetting} fmt={fmt} exportAllData={exportAllData} importRef={importRef} importAllData={importAllData} setConfirmAction={setConfirmAction} resetAllData={resetAllData} navProps={navProps} />;
+    return <Settings settings={settings} updateSetting={updateSetting} fmt={fmt} taxYearLabel={taxYearLabel} exportAllData={exportAllData} importRef={importRef} importAllData={importAllData} setConfirmAction={setConfirmAction} resetAllData={resetAllData} navProps={navProps} />;
   }
 
   // ═══ MONTH VIEW ═══

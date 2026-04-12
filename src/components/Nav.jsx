@@ -6,14 +6,20 @@ export default function Nav({ view, setView, openDay, onQuickAdd, quickActionsOp
       {quickActionsOpen && <button type="button" onClick={() => setQuickActionsOpen(false)} style={S.quickOverlay} aria-label="Close quick actions" />}
       {quickActionsOpen && (
         <div style={S.quickMenu}>
+          <div style={S.quickMenuLabel}>Daily</div>
           <button type="button" onClick={() => onQuickAdd("entry")} style={S.quickItem}>➕ Add today's entry</button>
-          <button type="button" onClick={() => onQuickAdd("newActiveJob")} style={S.quickItem}>🔨 Start a job</button>
           <button type="button" onClick={() => onQuickAdd("jobExpense")} style={S.quickItem}>🧱 Add job expense</button>
           <button type="button" onClick={() => onQuickAdd("jobLabour")} style={S.quickItem}>👷 Add job labour</button>
-          <div style={{height:1, background:"#2A2D35", margin:"4px 0"}} />
-          <button type="button" onClick={() => onQuickAdd("book")} style={{...S.quickItem, color:"#888"}}>📋 Book a job (calendar)</button>
-          <button type="button" onClick={() => onQuickAdd("expense")} style={{...S.quickItem, color:"#888"}}>💳 Add business expense</button>
-          <button type="button" onClick={() => onQuickAdd("job")} style={{...S.quickItem, color:"#888"}}>✓ Log completed job</button>
+          <div style={{height:1, background:"#2A2D35", margin:"6px 0"}} />
+          <div style={S.quickMenuLabel}>Jobs</div>
+          <button type="button" onClick={() => onQuickAdd("newActiveJob")} style={S.quickItem}>🔨 Start a job</button>
+          <button type="button" onClick={() => onQuickAdd("viewJobs")} style={S.quickItem}>📋 View all jobs</button>
+          <button type="button" onClick={() => onQuickAdd("job")} style={S.quickItem}>✓ Log completed job</button>
+          <button type="button" onClick={() => onQuickAdd("book")} style={S.quickItem}>📆 Book a job (calendar)</button>
+          <div style={{height:1, background:"#2A2D35", margin:"6px 0"}} />
+          <div style={S.quickMenuLabel}>Other</div>
+          <button type="button" onClick={() => onQuickAdd("expense")} style={{...S.quickItem, color:"#aaa"}}>💳 Add business expense</button>
+          <button type="button" onClick={() => onQuickAdd("addClient")} style={{...S.quickItem, color:"#aaa"}}>👤 Add client</button>
         </div>
       )}
       {undoItem && (
@@ -45,7 +51,7 @@ export default function Nav({ view, setView, openDay, onQuickAdd, quickActionsOp
         <button onClick={() => setView("schedule")} style={{...S.navBtn,...(view==="schedule"||view==="month"?S.navActive:{})}}><span style={S.navIcon}>📆</span><span style={S.navTxt}>Calendar</span></button>
         <button onClick={() => setQuickActionsOpen(!quickActionsOpen)} style={S.navAdd}><span style={{fontSize:28,lineHeight:1}}>{quickActionsOpen ? "×" : "+"}</span></button>
         <button onClick={() => setView("jobs")} style={{...S.navBtn,...(view==="jobs"?S.navActive:{})}}><span style={S.navIcon}>🔨</span><span style={S.navTxt}>Jobs</span></button>
-        <button onClick={() => setView("clients")} style={{...S.navBtn,...(view==="clients"||view==="overheads"?S.navActive:{})}}><span style={S.navIcon}>💰</span><span style={S.navTxt}>Money</span></button>
+        <button onClick={() => setView("clients")} style={{...S.navBtn,...(view==="clients"||view==="overheads"||view==="editClientProfile"||view==="addClient"?S.navActive:{})}}><span style={S.navIcon}>💰</span><span style={S.navTxt}>Money</span></button>
         <button onClick={() => setView("settings")} style={{...S.navBtn,...(view==="settings"?S.navActive:{})}}><span style={S.navIcon}>⚙️</span><span style={S.navTxt}>Settings</span></button>
       </div>
     </>

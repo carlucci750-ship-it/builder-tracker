@@ -1,6 +1,6 @@
 import S from "../styles.js";
 
-export default function EditJob({ editingJob, setEditingJob, jobEditForm, updateJobEditForm, knownClients, knownJobs, saveJobEdit, saveJobs, jobs, queueUndo, setConfirmAction, saveFlash, setView, fmt }) {
+export default function EditJob({ editingJob, setEditingJob, jobEditForm, updateJobEditForm, knownClients, knownJobs, saveJobEdit, saveJobs, jobs, queueUndo, setConfirmAction, saveFlash, setView, fmt, generateInvoice }) {
   const jf = jobEditForm;
   const sp = (jf.dateFrom||"").split("-").map(Number);
   const ep = (jf.dateTo||"").split("-").map(Number);
@@ -86,6 +86,7 @@ export default function EditJob({ editingJob, setEditingJob, jobEditForm, update
           ) : null;
         })()}
         <button onClick={saveJobEdit} style={{...S.saveBtn, ...(saveFlash ? S.saveBtnFlash : {})}}>{saveFlash ? "✓ Saved!" : "Save Changes"}</button>
+        <button type="button" onClick={() => generateInvoice(editingJob)} style={S.invoiceBtn}>🧾 Generate Invoice</button>
         <button type="button" onClick={() => setConfirmAction({ label: "Delete this completed job?", action: () => { const prev = jobs; saveJobs(jobs.filter(j => j !== editingJob)); queueUndo("Job deleted", () => saveJobs(prev)); setEditingJob(null); setView("jobs"); } })} style={S.deleteBtn}>Delete Job</button>
       </div>
     </div>
