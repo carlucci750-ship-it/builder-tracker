@@ -10,6 +10,32 @@ to read than `git log` and survives across Claude sessions and tools.
 
 ---
 
+## 2026-04-12 — Port supplier field and quote rename into refactored structure
+
+**What:** Two features that were added to the old monolith App.jsx before
+the refactor — the supplier field on job expenses and the rename of
+"Expected Revenue" to "Quote" (with inline editing) — have been ported
+into the new multi-file structure. The supplier field now appears on the
+Add Expense form in ActiveJobDetail, auto-suggests from previously used
+suppliers, and shows in the expense history. The Quote label replaces
+"Expected Revenue" everywhere (CreateActiveJob, Jobs cards,
+ActiveJobDetail) and can be tapped to edit directly on the job detail
+screen. Also fixed a latent bug where the JobExpPicker wasn't resetting
+the supplier field when opening a job.
+
+**Why:** These two commits existed on the remote branch but were made
+against the old single-file App.jsx. The refactor replaced that file, so
+the features needed to be manually ported into the new view files
+(ActiveJobDetail.jsx, Jobs.jsx, CreateActiveJob.jsx, JobExpPicker.jsx)
+and the slimmed-down App.jsx.
+
+**Risk:** Low. The build passes cleanly (37 modules, 310 kB bundle). The
+changes touch well-understood UI code — form fields, labels, and a small
+inline-edit interaction. If the quote edit feels wrong, it's isolated to
+ActiveJobDetail.jsx and easy to tweak.
+
+---
+
 ## 2026-04-11 — Cleanup pass after the refactor
 
 **What:** Removed four unused pieces from `src/App.jsx` that were left

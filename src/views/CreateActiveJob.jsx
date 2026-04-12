@@ -23,7 +23,7 @@ export default function CreateActiveJob({ activeJobForm, setActiveJobForm, known
           <input style={S.input} type="date" value={activeJobForm.startDate} onChange={e => setActiveJobForm({...activeJobForm, startDate: e.target.value})} />
         </div>
         <div style={S.fieldGroup}>
-          <label style={S.label}>Expected Revenue (optional)</label>
+          <label style={S.label}>Quote (optional)</label>
           <input style={S.input} type="number" inputMode="decimal" placeholder="0" value={activeJobForm.expectedRevenue} onChange={e => setActiveJobForm({...activeJobForm, expectedRevenue: e.target.value})} />
         </div>
         <button onClick={createActiveJob} style={{...S.saveBtn, ...(saveFlash ? S.saveBtnFlash : {})}}>{saveFlash ? "✓ Started!" : "Start Job"}</button>

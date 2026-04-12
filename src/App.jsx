@@ -56,11 +56,13 @@ export default function App() {
   const [jobsSubView, setJobsSubView] = useState("active");
   const [viewingActiveJob, setViewingActiveJob] = useState(null);
   const [activeJobForm, setActiveJobForm] = useState({ client:"", job:"", startDate: dateKey(new Date()), expectedRevenue:"" });
-  const [jobExpForm, setJobExpForm] = useState({ date: dateKey(new Date()), amount:"", category:"Materials", note:"" });
+  const [jobExpForm, setJobExpForm] = useState({ date: dateKey(new Date()), amount:"", category:"Materials", note:"", supplier:"" });
   const [jobExpPickerOpen, setJobExpPickerOpen] = useState(false);
   const [jobExpPickerCategory, setJobExpPickerCategory] = useState(null);
   const [completeMode, setCompleteMode] = useState(false);
   const [finalRevInput, setFinalRevInput] = useState("");
+  const [quoteEditMode, setQuoteEditMode] = useState(false);
+  const [quoteEditVal, setQuoteEditVal] = useState("");
   const showToast = (msg, type = "success") => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast({ msg, type });
@@ -152,12 +154,13 @@ export default function App() {
       amount: amt,
       category: jobExpPickerCategory || jobExpForm.category,
       note: jobExpForm.note.trim(),
+      supplier: jobExpForm.supplier.trim(),
     };
     const updated = activeJobs.map(j => j.id === jobId ? { ...j, expenses: [...j.expenses, expense] } : j);
     saveActiveJobs(updated);
     const updatedJob = updated.find(j => j.id === jobId);
     if (updatedJob) setViewingActiveJob(updatedJob);
-    setJobExpForm({ date: dateKey(new Date()), amount:"", category: jobExpForm.category, note:"" });
+    setJobExpForm({ date: dateKey(new Date()), amount:"", category: jobExpForm.category, note:"", supplier:"" });
     setSaveFlash(true); setTimeout(() => setSaveFlash(false), 1200);
     setJobExpPickerOpen(false); setJobExpPickerCategory(null);
   };
@@ -656,6 +659,11 @@ export default function App() {
     Object.values(entries).forEach(e => { if (e.description?.trim()) s.add(e.description.trim()); });
     return [...s].sort();
   }, [entries]);
+  const knownSuppliers = useMemo(() => {
+    const s = new Set();
+    activeJobs.forEach(aj => aj.expenses.forEach(e => { if (e.supplier?.trim()) s.add(e.supplier.trim()); }));
+    return [...s].sort();
+  }, [activeJobs]);
 
   // Schedule helpers
   const getWeekDays = (monday) => Array.from({length: 7}, (_, i) => { const d = new Date(monday); d.setDate(d.getDate()+i); return d; });
@@ -693,7 +701,7 @@ export default function App() {
 
   // ═══ ACTIVE JOB DETAIL ═══
   if (view === "activeJobDetail" && viewingActiveJob) {
-    return <ActiveJobDetail viewingActiveJob={viewingActiveJob} activeJobs={activeJobs} setViewingActiveJob={setViewingActiveJob} setJobsSubView={setJobsSubView} setView={setView} jobExpForm={jobExpForm} setJobExpForm={setJobExpForm} addExpenseToJob={addExpenseToJob} removeJobExpense={removeJobExpense} addDayWorked={addDayWorked} removeDayWorked={removeDayWorked} completeMode={completeMode} setCompleteMode={setCompleteMode} finalRevInput={finalRevInput} setFinalRevInput={setFinalRevInput} completeActiveJob={completeActiveJob} deleteActiveJob={deleteActiveJob} setConfirmAction={setConfirmAction} saveFlash={saveFlash} fmt={fmt} />;
+    return <ActiveJobDetail viewingActiveJob={viewingActiveJob} activeJobs={activeJobs} setViewingActiveJob={setViewingActiveJob} setJobsSubView={setJobsSubView} setView={setView} jobExpForm={jobExpForm} setJobExpForm={setJobExpForm} addExpenseToJob={addExpenseToJob} removeJobExpense={removeJobExpense} addDayWorked={addDayWorked} removeDayWorked={removeDayWorked} completeMode={completeMode} setCompleteMode={setCompleteMode} finalRevInput={finalRevInput} setFinalRevInput={setFinalRevInput} completeActiveJob={completeActiveJob} deleteActiveJob={deleteActiveJob} setConfirmAction={setConfirmAction} saveFlash={saveFlash} fmt={fmt} knownSuppliers={knownSuppliers} quoteEditMode={quoteEditMode} setQuoteEditMode={setQuoteEditMode} quoteEditVal={quoteEditVal} setQuoteEditVal={setQuoteEditVal} saveActiveJobs={saveActiveJobs} />;
   }
 
   // ═══ ADD EXPENSE TO JOB (picker) ═══
@@ -703,7 +711,7 @@ export default function App() {
 
   // ═══ JOBS LIST ═══
   if (view === "jobs") {
-    return <Jobs jobs={jobs} activeJobs={activeJobs} jobSearch={jobSearch} setJobSearch={setJobSearch} jobsSubView={jobsSubView} setJobsSubView={setJobsSubView} openQuickAction={openQuickAction} setViewingActiveJob={setViewingActiveJob} setJobExpForm={setJobExpForm} setCompleteMode={setCompleteMode} setJobForm={setJobForm} setCompletingBooking={setCompletingBooking} openJobEdit={openJobEdit} defaultJobForm={defaultJobForm} fmt={fmt} setView={setView} navProps={navProps} Nav={Nav} />;
+    return <Jobs jobs={jobs} activeJobs={activeJobs} jobSearch={jobSearch} setJobSearch={setJobSearch} jobsSubView={jobsSubView} setJobsSubView={setJobsSubView} openQuickAction={openQuickAction} setViewingActiveJob={setViewingActiveJob} setJobExpForm={setJobExpForm} setCompleteMode={setCompleteMode} setQuoteEditMode={setQuoteEditMode} setJobForm={setJobForm} setCompletingBooking={setCompletingBooking} openJobEdit={openJobEdit} defaultJobForm={defaultJobForm} fmt={fmt} setView={setView} navProps={navProps} Nav={Nav} />;
   }
 
   // ═══ BOOK DATE RANGE ═══

@@ -1,7 +1,7 @@
 import S from "../styles.js";
 import { dateKey } from "../utils.js";
 
-export default function Jobs({ jobs, activeJobs, jobSearch, setJobSearch, jobsSubView, setJobsSubView, openQuickAction, setViewingActiveJob, setJobExpForm, setCompleteMode, setJobForm, setCompletingBooking, openJobEdit, defaultJobForm, fmt, setView, navProps, Nav }) {
+export default function Jobs({ jobs, activeJobs, jobSearch, setJobSearch, jobsSubView, setJobsSubView, openQuickAction, setViewingActiveJob, setJobExpForm, setCompleteMode, setQuoteEditMode, setJobForm, setCompletingBooking, openJobEdit, defaultJobForm, fmt, setView, navProps, Nav }) {
   const totalJobProfit = jobs.reduce((t, j) => t + (j.profit||0), 0);
   const totalJobEarnings = jobs.reduce((t, j) => t + (j.totalEarnings||0), 0);
   const completedSorted = [...jobs].sort((a, b) => (b.completedAt || b.dateFrom || "").localeCompare(a.completedAt || a.dateFrom || ""));
@@ -35,7 +35,7 @@ export default function Jobs({ jobs, activeJobs, jobSearch, setJobSearch, jobsSu
             const expectedRev = Number(aj.expectedRevenue) || 0;
             const estProfit = expectedRev > 0 ? expectedRev - totalExp : null;
             return (
-              <button key={aj.id} type="button" onClick={() => { setViewingActiveJob(aj); setJobExpForm({ date: dateKey(new Date()), amount:"", category:"Materials", note:"" }); setCompleteMode(false); setView("activeJobDetail"); }} style={{...S.jobCard, display:"block", textAlign:"left", border:"none", cursor:"pointer", fontFamily:"inherit", color:"#F0F0F0", width:"calc(100% - 40px)", borderLeft:"3px solid #E67E22"}}>
+              <button key={aj.id} type="button" onClick={() => { setViewingActiveJob(aj); setJobExpForm({ date: dateKey(new Date()), amount:"", category:"Materials", note:"", supplier:"" }); setCompleteMode(false); setQuoteEditMode(false); setView("activeJobDetail"); }} style={{...S.jobCard, display:"block", textAlign:"left", border:"none", cursor:"pointer", fontFamily:"inherit", color:"#F0F0F0", width:"calc(100% - 40px)", borderLeft:"3px solid #E67E22"}}>
                 <div style={S.jobCardHeader}>
                   <div>
                     <div style={S.jobCardClient}>{aj.client}</div>
@@ -47,7 +47,7 @@ export default function Jobs({ jobs, activeJobs, jobSearch, setJobSearch, jobsSu
                 </div>
                 <div style={S.jobCardDates}>Started {aj.startDate} · {aj.daysWorked.length} days worked</div>
                 <div style={S.jobCardStats}>
-                  {expectedRev > 0 && <div style={S.jobCardStat}><span style={S.jobCardStatLbl}>Expected</span>{fmt(expectedRev)}</div>}
+                  {expectedRev > 0 && <div style={S.jobCardStat}><span style={S.jobCardStatLbl}>Quote</span>{fmt(expectedRev)}</div>}
                   <div style={S.jobCardStat}><span style={S.jobCardStatLbl}>Expenses</span><span style={{color:"#E74C3C"}}>{fmt(totalExp)}</span></div>
                   <div style={S.jobCardStat}><span style={S.jobCardStatLbl}>Days</span>{aj.daysWorked.length}</div>
                   {estProfit !== null && <div style={S.jobCardStat}><span style={S.jobCardStatLbl}>Est. Profit</span><span style={{color:estProfit>=0?"#27AE60":"#E74C3C"}}>{fmt(estProfit)}</span></div>}

@@ -15,7 +15,7 @@ export default function JobExpPicker({ activeJobs, jobExpPickerCategory, setJobE
           return (
             <button key={aj.id} type="button" onClick={() => {
               setViewingActiveJob(aj);
-              setJobExpForm({ date: dateKey(new Date()), amount:"", category: jobExpPickerCategory || "Materials", note:"" });
+              setJobExpForm({ date: dateKey(new Date()), amount:"", category: jobExpPickerCategory || "Materials", note:"", supplier:"" });
               setJobExpPickerOpen(false);
               setCompleteMode(false);
               setView("activeJobDetail");
