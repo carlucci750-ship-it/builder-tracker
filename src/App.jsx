@@ -96,6 +96,10 @@ export default function App() {
   const _todayMonth = _today.getMonth();
   const _todayYear = _today.getFullYear();
   const taxYearStartYear = _todayMonth >= taxMonthStart ? _todayYear : _todayYear - 1;
+  const taxMonths = Array.from({length: 12}, (_, i) => {
+    const total = taxMonthStart + i;
+    return { month: total % 12, year: taxYearStartYear + Math.floor(total / 12) };
+  });
   const taxYearLabel = taxMonthStart === 0 ? String(taxYearStartYear) : `${taxYearStartYear}-${String(taxYearStartYear + 1).slice(-2)}`;
 
   const lastEntry = useMemo(() => {
